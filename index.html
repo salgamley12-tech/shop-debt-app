@@ -102,7 +102,7 @@
     <section class="panel">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 مؤمن ومحفوظ محلياً</span>
+        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ ومؤمن</span>
       </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
@@ -232,7 +232,7 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v12';
+    const STORAGE_KEY = 'shop_debt_ledger_v13';
     let state = { customers: [], transactions: [] };
     let shopWhatsapp = localStorage.getItem('shop_whatsapp_number') || '';
     let shopName = localStorage.getItem('shop_custom_name') || 'سجل_ديون_المحل';
@@ -248,6 +248,19 @@
       badge.textContent = '🟢 تم الحفظ والتحديث التراكمي';
       setTimeout(() => { badge.textContent = '🟢 مؤمن ومحفوظ محلياً'; }, 2500);
       render();
+    }
+
+    // دالة إرسال النسخة التراكمية مباشرة للواتساب
+    function sendCumulativeWhatsApp() {
+      if (!shopWhatsapp) {
+        alert('يرجى تحديد رقم الواتساب أولاً من "⚙️ إعدادات المحل"');
+        document.getElementById('settings-modal').showModal();
+        return;
+      }
+      const today = new Date().toISOString().slice(0,10);
+      const dataStr = JSON.stringify(state);
+      const msg = `📦 *${shopName} - النسخة التراكمية المحدثة (${today})* 📦\n\nإليك كود البيانات المجمع:\n\`\`\`json\n${dataStr}\n\`\`\``;
+      window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     function getCustomerBalances(customerId) {
@@ -296,6 +309,9 @@
       document.getElementById('tx-note').value = '';
       
       saveState();
+
+      // إرسال النسخة التراكمية تلقائياً للواتساب مع كل عملية حفظ جديدة
+      sendCumulativeWhatsApp();
     });
 
     function render(filterText = '') {
@@ -401,17 +417,9 @@
       alert('تم حفظ إعدادات المحل بنجاح!');
     });
 
-    // إرسال واتساب تراكمي
+    // ربط زر الواتساب اليدوي
     document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
-      if (!shopWhatsapp) {
-        alert('يرجى تحديد رقم الواتساب أولاً من "⚙️ إعدادات المحل"');
-        settingsModal.showModal();
-        return;
-      }
-      const today = new Date().toISOString().slice(0,10);
-      const dataStr = JSON.stringify(state);
-      const msg = `📦 *${shopName} - النسخة التراكمية (${today})* 📦\n\nإليك كود البيانات المجمع:\n\`\`\`json\n${dataStr}\n\`\`\``;
-      window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+      sendCumulativeWhatsApp();
     });
 
     // النسخ التراكمي
@@ -436,12 +444,4 @@
       try {
         let val = textArea.value.trim();
         if (val.includes('```json')) {
-          val = val.split('```json')[1].split('```')[0].trim();
-        } else if (val.includes('```')) {
-          val = val.split('```')[1].split('```')[0].trim();
-        }
-
-        const parsed = JSON.parse(val);
-        if (parsed.customers && parsed.transactions) {
-          state = parsed;
-          sa
+          val = val.split('```json')[1].spl

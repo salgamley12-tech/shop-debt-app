@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - سجل ديون المحل</title>
+  <title>دفتري - سجل ديون المحل (مزامنة واتساب التراكمية)</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -12,6 +12,7 @@
       --secondary: #475569;
       --danger: #dc2626;
       --success: #16a34a;
+      --whatsapp: #25d366;
       --border: #e2e8f0;
       --text: #0f172a;
     }
@@ -46,21 +47,21 @@
     .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
     .form-group.full-width { grid-column: 1 / -1; }
     label { font-size: 0.88rem; font-weight: 600; }
-    input, select { padding: 0.7rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
-    input:focus, select:focus { border-color: var(--primary); }
+    input, select, textarea { padding: 0.7rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
     .btn {
       padding: 0.6rem 1.1rem; border: none; border-radius: 6px; cursor: pointer;
       font-weight: 600; font-size: 0.88rem; display: inline-block; text-align: center;
     }
     .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
-    .btn.success { background: var(--success); color: #fff; }
+    .btn.whatsapp { background: var(--whatsapp); color: #fff; display: inline-flex; align-items: center; gap: 0.4rem; }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
     th, td { padding: 0.8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
     th { background: #f8fafc; font-weight: 700; }
-    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 750px; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 600px; }
     .modal::backdrop { background: rgba(0,0,0,0.5); }
     .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -72,12 +73,9 @@
   <header class="app-header">
     <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-share-backup" class="btn success" style="background: #0284c7; color: #fff;">📤 مشاركة النسخة</button>
-      <button id="btn-backup" class="btn success">💾 تنزيل نسخة</button>
-      <label class="btn secondary" style="cursor: pointer; display: inline-flex; align-items: center;">
-        📂 استعادة <input type="file" id="input-restore" accept=".json" hidden>
-      </label>
-      <button id="btn-export-csv" class="btn secondary">📊 Excel</button>
+      <button id="btn-whatsapp-sync" class="btn whatsapp">💬 مزامنة واتساب التراكمية</button>
+      <button id="btn-settings" class="btn secondary">⚙️ رقم المحل</button>
+      <button id="btn-open-text" class="btn secondary">📋 نسخة نصية</button>
     </div>
   </header>
 
@@ -100,7 +98,7 @@
     <section class="panel">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 تم النسخ التلقائي</span>
+        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ محلياً</span>
       </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
@@ -136,7 +134,7 @@
           <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، دفعة نقدية...">
         </div>
         <div class="form-group full-width">
-          <button type="submit" class="btn primary">حفظ العملية والنسخ التلقائي</button>
+          <button type="submit" class="btn primary">حفظ العملية والتحديث الفوري</button>
         </div>
       </form>
     </section>
@@ -163,6 +161,37 @@
         </table>
       </div>
     </section>
+
+    <!-- نافذة إعداد رقم الواتساب -->
+    <dialog id="settings-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>إعداد رقم الواتساب لاستقبال النسخ</h3>
+          <button onclick="document.getElementById('settings-modal').close()" class="btn danger">إغلاق</button>
+        </div>
+        <p style="font-size: 0.88rem; color: var(--secondary);">اكتب رقم واتساب المحل (متبوعاً برقم الدولة، مثل: 96777xxxxxxx) ليتم إرسال السجل التراكمي إليه:</p>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label>رقم الواتساب:</label>
+          <input type="text" id="whatsapp-number-input" placeholder="967771234567">
+        </div>
+        <button id="btn-save-settings" class="btn primary">حفظ الرقم</button>
+      </div>
+    </dialog>
+
+    <!-- نافذة النسخ النصي الاحتياطي -->
+    <dialog id="text-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>النسخ والاستعادة النصية السريعة</h3>
+          <button onclick="document.getElementById('text-modal').close()" class="btn danger">إغلاق</button>
+        </div>
+        <textarea id="backup-text-area" rows="6" style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="btn-copy-text" class="btn success" style="flex: 1;">📋 نسخ النص</button>
+          <button id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة البيانات</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="statement-modal" class="modal">
       <div class="modal-content">
@@ -194,8 +223,9 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v5';
+    const STORAGE_KEY = 'shop_debt_ledger_v7';
     let state = { customers: [], transactions: [] };
+    let shopWhatsapp = localStorage.getItem('shop_whatsapp_number') || '';
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -205,8 +235,8 @@
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       const badge = document.getElementById('auto-save-status');
-      badge.textContent = '🟢 تم النسخ الاحتياطي تلقائياً';
-      setTimeout(() => { badge.textContent = '🟢 النظام جاهز'; }, 2500);
+      badge.textContent = '🟢 تم الحفظ والتحديث التراكمي';
+      setTimeout(() => { badge.textContent = '🟢 محفوظ محلياً'; }, 2500);
       render();
     }
 
@@ -344,81 +374,71 @@
     document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
-    // ميزة مشاركة النسخة الاحتياطية مباشرة (عبر الواتساب أو التطبيقات الأخرى)
-    document.getElementById('btn-share-backup').addEventListener('click', async () => {
-      const today = new Date().toISOString().slice(0,10);
-      const fileName = `سجل_ديون_المحل_${today}.json`;
-      const jsonStr = JSON.stringify(state, null, 2);
-      const file = new File([jsonStr], fileName, { type: 'application/json' });
+    // إعداد رقم الواتساب
+    const settingsModal = document.getElementById('settings-modal');
+    document.getElementById('btn-settings').addEventListener('click', () => {
+      document.getElementById('whatsapp-number-input').value = shopWhatsapp;
+      settingsModal.showModal();
+    });
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: 'نسخة احتياطية - ديون المحل',
-            text: 'إليك النسخة الاحتياطية المحدثة لسجل ديون المحل.'
-          });
-        } catch (error) {
-          console.log('تم إلغاء المشاركة');
-        }
-      } else {
-        // بديل في حال عدم دعم المشاركة المباشرة (تنزيل عادي)
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = fileName;
-        a.click();
+    document.getElementById('btn-save-settings').addEventListener('click', () => {
+      shopWhatsapp = document.getElementById('whatsapp-number-input').value.trim();
+      localStorage.setItem('shop_whatsapp_number', shopWhatsapp);
+      settingsModal.close();
+      alert('تم حفظ رقم الواتساب بنجاح!');
+    });
+
+    // زر مزامنة واتساب التراكمية
+    document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
+      if (!shopWhatsapp) {
+        alert('يرجى أولاً إدخال رقم الواتساب الخاص بك من زر "⚙️ رقم المحل"');
+        settingsModal.showModal();
+        return;
       }
+
+      const dataStr = JSON.stringify(state);
+      const encodedData = encodeURIComponent(dataStr);
+      const msg = `📦 *سجل ديون المحل - النسخة التراكمية المحدثة* 📦\n\nإليك كود البيانات المجمع:\n\`\`\`json\n${dataStr}\n\`\`\``;
+      
+      const whatsappUrl = `https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`;
+      window.open(whatsappUrl, '_blank');
     });
 
-    document.getElementById('btn-backup').addEventListener('click', () => {
-      const today = new Date().toISOString().slice(0,10);
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `سجل_ديون_المحل_${today}.json`;
-      a.click();
+    // النسخ والاستعادة النصية الاحتياطية
+    const textModal = document.getElementById('text-modal');
+    const textArea = document.getElementById('backup-text-area');
+
+    document.getElementById('btn-open-text').addEventListener('click', () => {
+      textArea.value = JSON.stringify(state, null, 2);
+      textModal.showModal();
     });
 
-    document.getElementById('input-restore').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const imported = JSON.parse(ev.target.result);
-          if (imported.customers && imported.transactions) {
-            state = imported;
-            saveState();
-            alert('تمت استعادة البيانات بنجاح!');
-          } else {
-            alert('الملف لا يحتوي على بيانات صالحة.');
-          }
-        } catch { 
-          alert('تأكد من اختيار ملف نسخة احتياطية صحيح (.json).'); 
-        }
-        e.target.value = '';
-      };
-      reader.readAsText(file);
-    });
-
-    document.getElementById('btn-export-csv').addEventListener('click', () => {
-      const today = new Date().toISOString().slice(0,10);
-      let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';
-      state.transactions.forEach(t => {
-        const c = state.customers.find(cust => cust.id === t.customerId) || {};
-        const typeLabel = t.type === 'debt' ? 'دين' : 'سداد';
-        csv += `"${c.name || ''}","${c.phone || ''}","${t.currency}","${typeLabel}",${t.amount},"${t.note || ''}","${t.date}"\n`;
+    document.getElementById('btn-copy-text').addEventListener('click', () => {
+      textArea.select();
+      navigator.clipboard.writeText(textArea.value).then(() => {
+        alert('تم نسخ البيانات النصية بنجاح!');
       });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `تقرير_الديون_${today}.csv`;
-      a.click();
+    });
+
+    document.getElementById('btn-restore-text').addEventListener('click', () => {
+      try {
+        const parsed = JSON.parse(textArea.value.trim());
+        if (parsed.customers && parsed.transactions) {
+          state = parsed;
+          saveState();
+          textModal.close();
+          alert('تمت استعادة كافة البيانات بنجاح تام!');
+        } else {
+          alert('النص غير صالح.');
+        }
+      } catch (e) {
+        alert('خطأ في صيغة النص.');
+      }
     });
 
     loadState();
     render();
   </script>
 </body>
-</html>
+  </html>
+  

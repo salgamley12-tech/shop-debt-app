@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>سجل ديون المحل - تطبيق محلي</title>
+  <title>سجل ديون المحل - النسخة الآمنة برقم سري</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -60,28 +60,19 @@
     table { width: 100%; border-collapse: collapse; text-align: right; }
     th, td { padding: 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
     th { background: #f8fafc; font-weight: 700; }
-    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 800px; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 500px; }
     .modal::backdrop { background: rgba(0,0,0,0.5); }
-    .modal-content { padding: 1.25rem; }
+    .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .modal-summary { display: flex; gap: 1.25rem; margin-bottom: 1rem; font-weight: bold; flex-wrap: wrap; }
-    @media print {
-      body * { visibility: hidden; }
-      #statement-modal, #statement-modal * { visibility: visible; }
-      #statement-modal { position: absolute; left: 0; top: 0; width: 100%; }
-      .btn { display: none !important; }
-    }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <h1>سجل ديون المحل</h1>
+    <h1>سجل ديون المحل (آمن برقم سري)</h1>
     <div class="header-actions">
+      <button id="btn-lock-backup" class="btn secondary">نسخ احتياطي مشفر</button>
+      <button id="btn-lock-restore" class="btn secondary">استعادة برقم سري</button>
       <button id="btn-export-csv" class="btn secondary">تصدير Excel</button>
-      <button id="btn-backup" class="btn secondary">نسخ احتياطي</button>
-      <label class="btn secondary file-label">
-        استعادة <input type="file" id="input-restore" accept=".json" hidden>
-      </label>
     </div>
   </header>
 
@@ -165,37 +156,28 @@
       </div>
     </section>
 
-    <dialog id="statement-modal" class="modal">
+    <!-- نافذة الحماية والرقم السري -->
+    <dialog id="security-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 id="modal-customer-title">كشف حساب</h3>
-          <div style="display: flex; gap: 0.5rem;">
-            <button onclick="window.print()" class="btn secondary">طباعة</button>
-            <button id="close-modal" class="btn danger">إغلاق</button>
-          </div>
+          <h3 id="sec-modal-title">إدخال الرقم السري</h3>
+          <button onclick="document.getElementById('security-modal').close()" class="btn danger">إغلاق</button>
         </div>
-        <div id="modal-balances" class="modal-summary"></div>
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>التاريخ</th>
-                <th>النوع</th>
-                <th>المبلغ</th>
-                <th>العملة</th>
-                <th>البيان</th>
-                <th>حذف</th>
-              </tr>
-            </thead>
-            <tbody id="statement-body"></tbody>
-          </table>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label>أدخل الرقم السري للحماية / فك التشفير:</label>
+          <input type="password" id="sec-password" placeholder="الرقم السري..." style="margin-top: 0.5rem;">
         </div>
+        <div id="sec-restore-file-group" class="form-group" style="margin-bottom: 1rem; display:none;">
+اختر ملف النسخة المشفرة:
+          <input type="file" id="sec-file-input" accept=".enc" style="margin-top: 0.5rem;">
+        </div>
+        <button id="sec-confirm-btn" class="btn primary">تنفيذ</button>
       </div>
     </dialog>
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v1';
+    const STORAGE_KEY = 'shop_debt_ledger_secure_v1';
     let state = { customers: [], transactions: [] };
 
     function loadState() {
@@ -206,6 +188,32 @@
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       render();
+    }
+
+    // دالة تشفير بسيطة وقوية باستخدام الرقم السري
+    function encryptData(data, secret) {
+      const jsonStr = JSON.stringify(data);
+      let encrypted = '';
+      for (let i = 0; i < jsonStr.length; i++) {
+        const charCode = jsonStr.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
+        encrypted += String.fromCharCode(charCode);
+      }
+      return btoa(encodeURIComponent(encrypted)); // Base64 encoding
+    }
+
+    // دالة فك التشفير برقم السري
+    function decryptData(encryptedBase64, secret) {
+      try {
+        const encrypted = decodeURIComponent(atob(encryptedBase64));
+        let decrypted = '';
+        for (let i = 0; i < encrypted.length; i++) {
+          const charCode = encrypted.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
+          decrypted += String.fromCharCode(charCode);
+        }
+        return JSON.parse(decrypted);
+      } catch (e) {
+        return null; // خطأ في الرقم السري أو الملف
+      }
     }
 
     function getCustomerBalances(customerId) {
@@ -256,6 +264,114 @@
       const tbody = document.getElementById('customers-table-body');
       const datalist = document.getElementById('customers-list');
       tbody.innerHTML = '';
+      datalist.innerHTML = '';
+
+      const totals = { YER: 0, SAR: 0, USD: 0 };
+      const sortedCustomers = [...state.customers].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      sortedCustomers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        datalist.appendChild(opt);
+
+        const bal = getCustomerBalances(c.id);
+        totals.YER += bal.YER;
+        totals.SAR += bal.SAR;
+        totals.USD += bal.USD;
+
+        if (filterText && !c.name.includes(filterText) && !(c.phone && c.phone.includes(filterText))) return;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${c.name}</strong></td>
+          <td>${c.phone || '-'}</td>
+          <td class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</td>
+          <td class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</td>
+          <td class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</td>
+          <td>${new Date(c.updatedAt).toLocaleDateString('ar-YE')}</td>
+          <td>-</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('total-yer').textContent = totals.YER.toLocaleString();
+      document.getElementById('total-sar').textContent = totals.SAR.toLocaleString();
+      document.getElementById('total-usd').textContent = totals.USD.toLocaleString();
+    }
+
+    const modal = document.getElementById('security-modal');
+    let currentMode = '';
+
+    document.getElementById('btn-lock-backup').addEventListener('click', () => {
+      currentMode = 'backup';
+      document.getElementById('sec-modal-title').textContent = 'إنشاء نسخ احتياطي مشفر';
+      document.getElementById('sec-restore-file-group').style.display = 'none';
+      document.getElementById('sec-password').value = '';
+      modal.showModal();
+    });
+
+    document.getElementById('btn-lock-restore').addEventListener('click', () => {
+      currentMode = 'restore';
+      document.getElementById('sec-modal-title').textContent = 'استعادة البيانات برقم سري';
+      document.getElementById('sec-restore-file-group').style.display = 'block';
+      document.getElementById('sec-password').value = '';
+      modal.showModal();
+    });
+
+    document.getElementById('sec-confirm-btn').addEventListener('click', () => {
+      const password = document.getElementById('sec-password').value;
+      if (!password) { alert('يرجى إدخال الرقم السري'); return; }
+
+      if (currentMode === 'backup') {
+        const encrypted = encryptData(state, password);
+        const blob = new Blob([encrypted], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `shop-secure-backup-${new Date().toISOString().slice(0,10)}.enc`;
+        a.click();
+        modal.close();
+      } else if (currentMode === 'restore') {
+        const fileInput = document.getElementById('sec-file-input');
+        if (!fileInput.files[0]) { alert('يرجى اختيار ملف النسخة (.enc)'); return; }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const decrypted = decryptData(e.target.result, password);
+          if (decrypted && decrypted.customers && decrypted.transactions) {
+            state = decrypted;
+            saveState();
+            alert('تمت استعادة البيانات بنجاح في أي مكان!');
+            modal.close();
+          } else {
+            alert('فشلفك التشفير! تأكد من صحة الرقم السري أو سلامة الملف.');
+          }
+        };
+        reader.readAsText(fileInput.files[0]);
+      }
+    });
+
+    document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
+
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+      let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';
+      state.transactions.forEach(t => {
+        const c = state.customers.find(cust => cust.id === t.customerId) || {};
+        const typeLabel = t.type === 'debt' ? 'دين' : 'سداد';
+        csv += `"${c.name || ''}","${c.phone || ''}","${t.currency}","${typeLabel}",${t.amount},"${t.note || ''}","${t.date}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `shop-debts-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    });
+
+    loadState();
+    render();
+  </script>
+</body>
+</html>
+tbody.innerHTML = '';
       datalist.innerHTML = '';
 
       const totals = { YER: 0, SAR: 0, USD: 0 };

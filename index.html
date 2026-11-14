@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - سجل ديون المحل (نسخ تلقائي على الذاكرة)</title>
+  <title>دفتري - سجل ديون المحل (تطبيق APK)</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -12,7 +12,6 @@
       --secondary: #475569;
       --danger: #dc2626;
       --success: #16a34a;
-      --whatsapp: #25d366;
       --border: #e2e8f0;
       --text: #0f172a;
     }
@@ -55,8 +54,7 @@
     }
     .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
-    .btn.file-sync { background: #0284c7; color: #fff; display: inline-flex; align-items: center; gap: 0.4rem; }
-    .btn.file-sync.linked { background: var(--success); }
+    .btn.success { background: var(--success); color: #fff; }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
@@ -74,8 +72,8 @@
   <header class="app-header">
     <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button type="button" id="btn-link-file" class="btn file-sync">💾 ربط ملف في الذاكرة (بدون نت)</button>
-      <button type="button" id="btn-load-file" class="btn secondary">📂 استيراد من الذاكرة</button>
+      <button type="button" id="btn-export-file" class="btn success">📥 تصدير ملف النسخة</button>
+      <button type="button" id="btn-import-file" class="btn secondary">📂 استيراد ملف</button>
       <button type="button" id="btn-open-text" class="btn secondary">📋 نسخ/استعادة نصية</button>
     </div>
   </header>
@@ -99,7 +97,7 @@
     <section class="panel">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
         <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ محلياً (غير مربوط بملف خارجي بعد)</span>
+        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ محلياً في التطبيق</span>
       </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
@@ -207,134 +205,71 @@
     </dialog>
   </main>
 
+  <!-- مخفي لرفع واستيراد الملفات -->
+  <input type="file" id="file-input" accept=".json" style="display: none;">
+
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_offline_v1';
+    const STORAGE_KEY = 'shop_debt_ledger_apk_v1';
     let state = { customers: [], transactions: [] };
-    let fileHandle = null;
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
     }
 
-    async function writeToExternalFile() {
-      if (!fileHandle) return false;
-      try {
-        const writable = await fileHandle.createWritable();
-        await writable.write(JSON.stringify(state, null, 2));
-        await writable.close();
-        return true;
-      } catch (err) {
-        console.error('فشلت الكتابة للملف:', err);
-        fileHandle = null;
-        updateLinkButton(false);
-        return false;
-      }
-    }
-
-    function updateLinkButton(isLinked, fileName = '') {
-      const btn = document.getElementById('btn-link-file');
-      const badge = document.getElementById('auto-save-status');
-      if (isLinked) {
-        btn.textContent = `✅ مربوط: ${fileName}`;
-        btn.classList.add('linked');
-        badge.textContent = `🟢 مؤمن ومكتوب تلقائياً في الذاكرة (${fileName})`;
-      } else {
-        btn.textContent = '💾 ربط ملف في الذاكرة (بدون نت)';
-        btn.classList.remove('linked');
-        badge.textContent = '🟢 محفوظ في المتصفح (اربط ملفاً للنسخ الخارجي)';
-      }
-    }
-
-    async function saveState() {
+    function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       const badge = document.getElementById('auto-save-status');
-      
-      if (fileHandle) {
-        const ok = await writeToExternalFile();
-        if (ok) {
-          badge.textContent = `🟢 تم التحديث التراكمي في الملف (${fileHandle.name}) بدون نت`;
-        }
-      } else {
-        badge.textContent = '🟢 تم الحفظ في المتصفح';
-      }
+      badge.textContent = '🟢 تم الحفظ والتحديث محلياً';
+      setTimeout(() => { badge.textContent = '🟢 محفوظ محلياً في التطبيق'; }, 2500);
       render();
     }
 
-    // ربط ملف جديد أو موجود في ذاكرة الهاتف/الجهاز للكتابة التراكمية الصامتة
-    document.getElementById('btn-link-file').addEventListener('click', async () => {
-      if (!window.showSaveFilePicker) {
-        alert('متصفحك الحالي لا يدعم الربط المباشر بالملفات. يرجى استخدام متصفح Chrome الحديث أو استخدم خيار "نسخ/استعادة نصية".');
-        return;
-      }
-      try {
-        fileHandle = await window.showSaveFilePicker({
-          suggestedName: 'سجل_ديون_المحل_التراكمي.json',
-          types: [{
-            description: 'ملف قاعدة بيانات الديون (JSON)',
-            accept: { 'application/json': ['.json'] }
-          }]
-        });
-        const ok = await writeToExternalFile();
-        if (ok) {
-          updateLinkButton(true, fileHandle.name);
-          alert(`تم ربط الملف "${fileHandle.name}" بنجاح! سيتم تحديث هذا الملف تلقائياً وبصمت مع كل عملية بدون إنترنت.`);
-        }
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          alert('تعذر ربط الملف: ' + err.message);
-        }
-      }
+    // تصدير ملف النسخة الاحتياطية لتخزينه في ذاكرة الهاتف
+    function exportBackupFile() {
+      const dataStr = JSON.stringify(state, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `سجل_الديون_${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('btn-export-file').addEventListener('click', () => {
+      exportBackupFile();
+      alert('تم تصدير ملف النسخة الاحتياطية إلى مجلد التحميلات بنجاح!');
     });
 
-    // استيراد بيانات من ملف محفوظ في ذاكرة الهاتف (عند تغيير الهاتف أو إعادة التثبيت)
-    document.getElementById('btn-load-file').addEventListener('click', async () => {
-      if (window.showOpenFilePicker) {
+    // استيراد الملف من ذاكرة الهاتف
+    document.getElementById('btn-import-file').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    document.getElementById('file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
         try {
-          const [handle] = await window.showOpenFilePicker({
-            types: [{
-              description: 'ملف قاعدة بيانات الديون (JSON)',
-              accept: { 'application/json': ['.json'] }
-            }]
-          });
-          const file = await handle.getFile();
-          const text = await file.text();
-          const parsed = JSON.parse(text);
+          const parsed = JSON.parse(ev.target.result);
           if (parsed.customers && parsed.transactions) {
             state = parsed;
-            fileHandle = handle; // ربط نفس الملف تلقائياً للمتابعة عليه
-            updateLinkButton(true, fileHandle.name);
-            await saveState();
-            alert(`تمت استعادة البيانات وربط الملف "${fileHandle.name}" بنجاح!`);
+            saveState();
+            alert('تمت استعادة كافة البيانات بنجاح تام وتحديث التطبيق!');
           } else {
-            alert('الملف المختار لا يحتوي على بيانات ديون صالحة.');
+            alert('الملف المختار لا يحتوي على بيانات صحيحة.');
           }
-        } catch (err) {
-          if (err.name !== 'AbortError') alert('خطأ أثناء قراءة الملف.');
+        } catch {
+          alert('خطأ في قراءة الملف.');
         }
-      } else {
-        // بديل للمتصفحات القديمة عبر input file
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            try {
-              const parsed = JSON.parse(ev.target.result);
-              if (parsed.customers && parsed.transactions) {
-                state = parsed;
-                saveState();
-                alert('تمت استعادة البيانات بنجاح!');
-              }
-            } catch { alert('ملف غير صالح.'); }
-          };
-          reader.readAsText(file);
-        };
-        input.click();
-      }
+      };
+      reader.readAsText(file);
+      e.target.value = ''; // إعادة تعيين الحقل
     });
 
     function getCustomerBalances(customerId) {
@@ -349,7 +284,7 @@
       return balances;
     }
 
-    document.getElementById('transaction-form').addEventListener('submit', async (e) => {
+    document.getElementById('transaction-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const name = document.getElementById('customer-name').value.trim();
       const phone = document.getElementById('customer-phone').value.trim();
@@ -382,7 +317,7 @@
       document.getElementById('tx-amount').value = '';
       document.getElementById('tx-note').value = '';
       
-      await saveState();
+      saveState();
     });
 
     function render(filterText = '') {
@@ -461,10 +396,10 @@
       modal.showModal();
     };
 
-    window.deleteTransaction = async function(txId, customerId) {
+    window.deleteTransaction = function(txId, customerId) {
       if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
       state.transactions = state.transactions.filter(t => t.id !== txId);
-      await saveState();
+      saveState();
       openStatement(customerId);
     };
 
@@ -472,4 +407,43 @@
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
     const textModal = document.getElementById('text-modal');
-    const textArea = d
+    const textArea = document.getElementById('backup-text-area');
+
+    document.getElementById('btn-open-text').addEventListener('click', () => {
+      textArea.value = JSON.stringify(state, null, 2);
+      textModal.showModal();
+    });
+
+    document.getElementById('btn-copy-text').addEventListener('click', () => {
+      textArea.select();
+      navigator.clipboard.writeText(textArea.value).then(() => {
+        alert('تم نسخ الكود التراكمي بنجاح!');
+      });
+    });
+
+    document.getElementById('btn-restore-text').addEventListener('click', () => {
+      try {
+        let val = textArea.value.trim();
+        if (val.includes('```json')) val = val.split('```json')[1].split('```')[0].trim();
+        else if (val.includes('```')) val = val.split('```')[1].split('```')[0].trim();
+
+        const parsed = JSON.parse(val);
+        if (parsed.customers && parsed.transactions) {
+          state = parsed;
+          saveState();
+          textModal.close();
+          alert('تمت استعادة كافة البيانات بنجاح تام!');
+        } else {
+          alert('النص لا يحتوي على بيانات صحيحة.');
+        }
+      } catch (e) {
+        alert('خطأ: تأكد من لصق كود البيانات بشكل كامل وصحيح.');
+      }
+    });
+
+    loadState();
+    render();
+  </script>
+</body>
+  </html>
+  

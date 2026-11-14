@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>سجل ديون المحل - النسخة الآمنة برقم سري</title>
+  <title>سجل ديون المحل - الإصدار الميداني السريع</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -46,32 +46,34 @@
     .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
     .form-group.full-width { grid-column: 1 / -1; }
     label { font-size: 0.88rem; font-weight: 600; }
-    input, select { padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+    input, select { padding: 0.7rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
     input:focus, select:focus { border-color: var(--primary); }
     .btn {
       padding: 0.6rem 1.1rem; border: none; border-radius: 6px; cursor: pointer;
       font-weight: 600; font-size: 0.88rem; display: inline-block; text-align: center;
     }
-    .btn.primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
-    .file-label { display: inline-flex; align-items: center; cursor: pointer; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
-    th, td { padding: 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th, td { padding: 0.8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
     th { background: #f8fafc; font-weight: 700; }
-    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 500px; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 750px; }
     .modal::backdrop { background: rgba(0,0,0,0.5); }
     .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .modal-summary { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-weight: bold; flex-wrap: wrap; background: #f8fafc; padding: 0.8rem; border-radius: 6px; }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <h1>سجل ديون المحل (آمن برقم سري)</h1>
+    <h1>دفتري - إدارة ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-lock-backup" class="btn secondary">نسخ احتياطي مشفر</button>
-      <button id="btn-lock-restore" class="btn secondary">استعادة برقم سري</button>
+      <button id="btn-backup" class="btn secondary">نسخ احتياطي</button>
+      <label class="btn secondary" style="cursor: pointer; display: inline-flex; align-items: center;">
+        استعادة <input type="file" id="input-restore" accept=".json" hidden>
+      </label>
       <button id="btn-export-csv" class="btn secondary">تصدير Excel</button>
     </div>
   </header>
@@ -79,25 +81,25 @@
   <main class="container">
     <section class="summary-grid">
       <div class="card">
-        <h3>إجمالي الديون (ريال يمني)</h3>
+        <h3>إجمالي الديون (يمني YER)</h3>
         <p id="total-yer" class="amount debit">0</p>
       </div>
       <div class="card">
-        <h3>إجمالي الديون (ريال سعودي)</h3>
+        <h3>إجمالي الديون (سعودي SAR)</h3>
         <p id="total-sar" class="amount debit">0</p>
       </div>
       <div class="card">
-        <h3>إجمالي الديون (دولار أمريكي)</h3>
+        <h3>إجمالي الديون (دولار USD)</h3>
         <p id="total-usd" class="amount debit">0</p>
       </div>
     </section>
 
     <section class="panel">
-      <h2>تسجيل عملية مالية جديدة</h2>
+      <h2>تسجيل عملية جديدة (دين أو سداد)</h2>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
           <label>اسم العميل</label>
-          <input type="text" id="customer-name" list="customers-list" required placeholder="ابحث أو اكتب اسماً جديداً">
+          <input type="text" id="customer-name" list="customers-list" required autocomplete="off" placeholder="اكتب اسم العميل...">
           <datalist id="customers-list"></datalist>
         </div>
         <div class="form-group">
@@ -107,8 +109,8 @@
         <div class="form-group">
           <label>نوع العملية</label>
           <select id="tx-type" required>
-            <option value="debt">دين جديد (عليه)</option>
-            <option value="payment">سداد دفعة (له)</option>
+            <option value="debt">دين جديد (عليه / آجل)</option>
+            <option value="payment">سداد دفعة (له / مقبوضات)</option>
           </select>
         </div>
         <div class="form-group">
@@ -124,19 +126,19 @@
           </select>
         </div>
         <div class="form-group">
-          <label>البيان / التفاصيل</label>
-          <input type="text" id="tx-note" placeholder="مثال: بضاعة آجل، دفعة نقدية...">
+          <label>البيان / ملاحظة</label>
+          <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، كيس حبة...">
         </div>
         <div class="form-group full-width">
-          <button type="submit" class="btn primary">حفظ العملية</button>
+          <button type="submit" class="btn primary">حفظ وتحديث الحساب فوراً</button>
         </div>
       </form>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>أرصدة العملاء</h2>
-        <input type="search" id="search-input" placeholder="بحث بالاسم أو الرقم...">
+        <h2>حسابات العملاء والديون</h2>
+        <input type="search" id="search-input" placeholder="🔍 ابحث بالاسم أو رقم الهاتف..." style="min-width: 250px;">
       </div>
       <div class="table-responsive">
         <table>
@@ -148,7 +150,7 @@
               <th>رصيد (SAR)</th>
               <th>رصيد (USD)</th>
               <th>آخر حركة</th>
-              <th>إجراءات</th>
+              <th>كشف الحساب</th>
             </tr>
           </thead>
           <tbody id="customers-table-body"></tbody>
@@ -156,28 +158,37 @@
       </div>
     </section>
 
-    <!-- نافذة الحماية والرقم السري -->
-    <dialog id="security-modal" class="modal">
+    <dialog id="statement-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 id="sec-modal-title">إدخال الرقم السري</h3>
-          <button onclick="document.getElementById('security-modal').close()" class="btn danger">إغلاق</button>
+          <h3 id="modal-customer-title">كشف حساب العميل</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button onclick="window.print()" class="btn secondary">🖨️ طباعة</button>
+            <button id="close-modal" class="btn danger">إغلاق</button>
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom: 1rem;">
-          <label>أدخل الرقم السري للحماية / فك التشفير:</label>
-          <input type="password" id="sec-password" placeholder="الرقم السري..." style="margin-top: 0.5rem;">
+        <div id="modal-balances" class="modal-summary"></div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>التاريخ والوقت</th>
+                <th>نوع الحركة</th>
+                <th>المبلغ</th>
+                <th>العملة</th>
+                <th>البيان</th>
+                <th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="statement-body"></tbody>
+          </table>
         </div>
-        <div id="sec-restore-file-group" class="form-group" style="margin-bottom: 1rem; display:none;">
-اختر ملف النسخة المشفرة:
-          <input type="file" id="sec-file-input" accept=".enc" style="margin-top: 0.5rem;">
-        </div>
-        <button id="sec-confirm-btn" class="btn primary">تنفيذ</button>
       </div>
     </dialog>
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_secure_v1';
+    const STORAGE_KEY = 'shop_debt_ledger_v2';
     let state = { customers: [], transactions: [] };
 
     function loadState() {
@@ -188,32 +199,6 @@
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       render();
-    }
-
-    // دالة تشفير بسيطة وقوية باستخدام الرقم السري
-    function encryptData(data, secret) {
-      const jsonStr = JSON.stringify(data);
-      let encrypted = '';
-      for (let i = 0; i < jsonStr.length; i++) {
-        const charCode = jsonStr.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
-        encrypted += String.fromCharCode(charCode);
-      }
-      return btoa(encodeURIComponent(encrypted)); // Base64 encoding
-    }
-
-    // دالة فك التشفير برقم السري
-    function decryptData(encryptedBase64, secret) {
-      try {
-        const encrypted = decodeURIComponent(atob(encryptedBase64));
-        let decrypted = '';
-        for (let i = 0; i < encrypted.length; i++) {
-          const charCode = encrypted.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
-          decrypted += String.fromCharCode(charCode);
-        }
-        return JSON.parse(decrypted);
-      } catch (e) {
-        return null; // خطأ في الرقم السري أو الملف
-      }
     }
 
     function getCustomerBalances(customerId) {
@@ -239,7 +224,7 @@
 
       if (!name || isNaN(amount) || amount <= 0) return;
 
-      let customer = state.customers.find(c => c.name === name);
+      let customer = state.customers.find(c => c.name.toLowerCase() === name.toLowerCase());
       const now = new Date().toISOString();
 
       if (!customer) {
@@ -256,7 +241,10 @@
         type, amount, currency, note, date: now
       });
 
-      e.target.reset();
+      document.getElementById('customer-name').value = '';
+      document.getElementById('customer-phone').value = '';
+      document.getElementById('tx-amount').value = '';
+      document.getElementById('tx-note').value = '';
       saveState();
     });
 
@@ -279,115 +267,11 @@
         totals.SAR += bal.SAR;
         totals.USD += bal.USD;
 
-        if (filterText && !c.name.includes(filterText) && !(c.phone && c.phone.includes(filterText))) return;
+        const matchesSearch = !filterText || 
+          c.name.toLowerCase().includes(filterText.toLowerCase()) || 
+          (c.phone && c.phone.includes(filterText));
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><strong>${c.name}</strong></td>
-          <td>${c.phone || '-'}</td>
-          <td class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</td>
-          <td class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</td>
-          <td class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</td>
-          <td>${new Date(c.updatedAt).toLocaleDateString('ar-YE')}</td>
-          <td>-</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      document.getElementById('total-yer').textContent = totals.YER.toLocaleString();
-      document.getElementById('total-sar').textContent = totals.SAR.toLocaleString();
-      document.getElementById('total-usd').textContent = totals.USD.toLocaleString();
-    }
-
-    const modal = document.getElementById('security-modal');
-    let currentMode = '';
-
-    document.getElementById('btn-lock-backup').addEventListener('click', () => {
-      currentMode = 'backup';
-      document.getElementById('sec-modal-title').textContent = 'إنشاء نسخ احتياطي مشفر';
-      document.getElementById('sec-restore-file-group').style.display = 'none';
-      document.getElementById('sec-password').value = '';
-      modal.showModal();
-    });
-
-    document.getElementById('btn-lock-restore').addEventListener('click', () => {
-      currentMode = 'restore';
-      document.getElementById('sec-modal-title').textContent = 'استعادة البيانات برقم سري';
-      document.getElementById('sec-restore-file-group').style.display = 'block';
-      document.getElementById('sec-password').value = '';
-      modal.showModal();
-    });
-
-    document.getElementById('sec-confirm-btn').addEventListener('click', () => {
-      const password = document.getElementById('sec-password').value;
-      if (!password) { alert('يرجى إدخال الرقم السري'); return; }
-
-      if (currentMode === 'backup') {
-        const encrypted = encryptData(state, password);
-        const blob = new Blob([encrypted], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `shop-secure-backup-${new Date().toISOString().slice(0,10)}.enc`;
-        a.click();
-        modal.close();
-      } else if (currentMode === 'restore') {
-        const fileInput = document.getElementById('sec-file-input');
-        if (!fileInput.files[0]) { alert('يرجى اختيار ملف النسخة (.enc)'); return; }
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const decrypted = decryptData(e.target.result, password);
-          if (decrypted && decrypted.customers && decrypted.transactions) {
-            state = decrypted;
-            saveState();
-            alert('تمت استعادة البيانات بنجاح في أي مكان!');
-            modal.close();
-          } else {
-            alert('فشلفك التشفير! تأكد من صحة الرقم السري أو سلامة الملف.');
-          }
-        };
-        reader.readAsText(fileInput.files[0]);
-      }
-    });
-
-    document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
-
-    document.getElementById('btn-export-csv').addEventListener('click', () => {
-      let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';
-      state.transactions.forEach(t => {
-        const c = state.customers.find(cust => cust.id === t.customerId) || {};
-        const typeLabel = t.type === 'debt' ? 'دين' : 'سداد';
-        csv += `"${c.name || ''}","${c.phone || ''}","${t.currency}","${typeLabel}",${t.amount},"${t.note || ''}","${t.date}"\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `shop-debts-${new Date().toISOString().slice(0,10)}.csv`;
-      a.click();
-    });
-
-    loadState();
-    render();
-  </script>
-</body>
-</html>
-tbody.innerHTML = '';
-      datalist.innerHTML = '';
-
-      const totals = { YER: 0, SAR: 0, USD: 0 };
-      const sortedCustomers = [...state.customers].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-
-      sortedCustomers.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.name;
-        datalist.appendChild(opt);
-
-        const bal = getCustomerBalances(c.id);
-        totals.YER += bal.YER;
-        totals.SAR += bal.SAR;
-        totals.USD += bal.USD;
-
-        if (filterText && !c.name.includes(filterText) && !(c.phone && c.phone.includes(filterText))) return;
+        if (!matchesSearch) return;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -412,12 +296,12 @@ tbody.innerHTML = '';
       const customer = state.customers.find(c => c.id === customerId);
       if (!customer) return;
 
-      document.getElementById('modal-customer-title').textContent = `كشف حساب: ${customer.name}`;
+      document.getElementById('modal-customer-title').textContent = `كشف حساب: ${customer.name} (${customer.phone || 'بدون هاتف'})`;
       const bal = getCustomerBalances(customerId);
       document.getElementById('modal-balances').innerHTML = `
-        <span>يمني: ${bal.YER.toLocaleString()}</span>
-        <span>سعودي: ${bal.SAR.toLocaleString()}</span>
-        <span>دولار: ${bal.USD.toLocaleString()}</span>
+        <span>رصيد يمني: <strong class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</strong></span>
+        <span>رصيد سعودي: <strong class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</strong></span>
+        <span>رصيد دولار: <strong class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</strong></span>
       `;
 
       const tbody = document.getElementById('statement-body');
@@ -428,11 +312,11 @@ tbody.innerHTML = '';
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${new Date(t.date).toLocaleString('ar-YE')}</td>
-          <td>${t.type === 'debt' ? 'دين عليه' : 'سداد منه'}</td>
-          <td>${t.amount.toLocaleString()}</td>
+          <td><span style="color: ${t.type === 'debt' ? 'var(--danger)' : 'var(--success)'}; font-weight: bold;">${t.type === 'debt' ? 'دين (عليه)' : 'سداد (له)'}</span></td>
+          <td><strong>${t.amount.toLocaleString()}</strong></td>
           <td>${t.currency}</td>
           <td>${t.note || '-'}</td>
-          <td><button class="btn danger" onclick="deleteTransaction('${t.id}', '${customerId}')">×</button></td>
+          <td><button class="btn danger" onclick="deleteTransaction('${t.id}', '${customerId}')">حذف</button></td>
         `;
         tbody.appendChild(tr);
       });
@@ -441,7 +325,7 @@ tbody.innerHTML = '';
     };
 
     window.deleteTransaction = function(txId, customerId) {
-      if (!confirm('تأكيد حذف هذه العملية؟')) return;
+      if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
       state.transactions = state.transactions.filter(t => t.id !== txId);
       saveState();
       openStatement(customerId);
@@ -454,7 +338,7 @@ tbody.innerHTML = '';
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `debts-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `shop-debts-backup-${new Date().toISOString().slice(0,10)}.json`;
       a.click();
     });
 
@@ -468,9 +352,9 @@ tbody.innerHTML = '';
           if (imported.customers && imported.transactions) {
             state = imported;
             saveState();
-            alert('تمت استعادة البيانات بنجاح');
+            alert('تمت استعادة البيانات بنجاح!');
           }
-        } catch { alert('ملف غير صالح'); }
+        } catch { alert('الملف التالف أو غير صالح.'); }
       };
       reader.readAsText(file);
     });
@@ -485,7 +369,7 @@ tbody.innerHTML = '';
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `shop-debts-${new Date().toISOString().slice(0,10)}.csv`;
+      a.download = `shop-debts-report-${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
     });
 
@@ -493,4 +377,5 @@ tbody.innerHTML = '';
     render();
   </script>
 </body>
-</html>
+                  </html>
+                  

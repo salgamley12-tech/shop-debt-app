@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - سجل ديون المحل (مزامنة إجبارية)</title>
+  <title>دفتري - سجل ديون المحل (النظام الشامل والمؤمن)</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -56,12 +56,13 @@
     .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
     .btn.whatsapp { background: var(--whatsapp); color: #fff; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .btn.success { background: var(--success); color: #fff; }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
     th, td { padding: 0.8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
     th { background: #f8fafc; font-weight: 700; }
-    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 600px; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 650px; }
     .modal::backdrop { background: rgba(0,0,0,0.5); }
     .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -73,9 +74,10 @@
   <header class="app-header">
     <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-whatsapp-sync" class="btn whatsapp">💬 إرسال نسخة واتساب</button>
-      <button id="btn-open-text" class="btn secondary">📥 استعادة سريعة بالنص</button>
-      <button id="btn-settings" class="btn secondary">⚙️ رقم المحل</button>
+      <button id="btn-whatsapp-sync" class="btn whatsapp">💬 إرسال واتساب تراكمي</button>
+      <button id="btn-open-text" class="btn success">📋 النسخ والنص التراكمي</button>
+      <button id="btn-settings" class="btn secondary">⚙️ إعدادات المحل</button>
+      <button id="btn-export-csv" class="btn secondary">📊 تصدير Excel</button>
     </div>
   </header>
 
@@ -98,7 +100,7 @@
     <section class="panel">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ ومؤمن</span>
+        <span id="auto-save-status" class="auto-save-badge">🟢 مؤمن ومحفوظ محلياً</span>
       </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
@@ -134,7 +136,7 @@
           <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، دفعة نقدية...">
         </div>
         <div class="form-group full-width">
-          <button type="submit" class="btn primary">حفظ العملية والتحديث الفوري</button>
+          <button type="submit" class="btn primary">حفظ وتحديث الحساب فوراً</button>
         </div>
       </form>
     </section>
@@ -162,32 +164,20 @@
       </div>
     </section>
 
-    <!-- نافذة إجبارية عند فتح التطبيق لأول مرة أو إذا كانت البيانات فارغة -->
-    <dialog id="force-restore-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 style="color: var(--danger);">⚠️ تنبيه: التطبيق فارغ أو جديد</h3>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.6;">
-          يبدو أنك فتحت التطبيق في هاتف جديد أو بعد إعادة التثبيت. لاستعادة كافة بياناتك وحساباتك السابقة فوراً، يرجى لصق كود النسخة التراكمية المحفوظ في واتساب:
-        </p>
-        <textarea id="force-text-area" rows="6" placeholder="الصق كود النسخة التراكمية هنا..." style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
-        <div style="display: flex; gap: 0.5rem;">
-          <button id="btn-force-restore" class="btn primary" style="flex: 1;">📥 استعادة البيانات وإلغاء القفل</button>
-        </div>
-      </div>
-    </dialog>
-
+    <!-- نافذة النسخ والنص التراكمي والاستعادة -->
     <dialog id="text-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>النسخ الاحتياطي والاستعادة النصية</h3>
+          <h3 id="modal-backup-title">النسخ الاحتياطي التراكمي والاستعادة</h3>
           <button onclick="document.getElementById('text-modal').close()" class="btn danger">إغلاق</button>
         </div>
-        <textarea id="backup-text-area" rows="6" style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
+        <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 0.5rem;">
+          هذا النص التراكمي يمثل السجل الكامل. يمكنك نسخه والاحتفاظ به، أو لصقه هنا لاستعادة البيانات فوراً:
+        </p>
+        <textarea id="backup-text-area" rows="6" placeholder="كود النسخة التراكمية..." style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button id="btn-copy-text" class="btn success" style="flex: 1;">📋 نسخ الكود الحالي</button>
-          <button id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة فورية</button>
+          <button id="btn-copy-text" class="btn success" style="flex: 1;">📋 نسخ الكود التراكمي</button>
+          <button id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة البيانات</button>
         </div>
       </div>
     </dialog>
@@ -195,14 +185,18 @@
     <dialog id="settings-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>إعداد رقم الواتساب</h3>
+          <h3>إعدادات المحل ورقم الواتساب</h3>
           <button onclick="document.getElementById('settings-modal').close()" class="btn danger">إغلاق</button>
         </div>
+        <div class="form-group" style="margin-bottom: 0.8rem;">
+          <label>اسم المحل (لتسمية النسخ والتقارير):</label>
+          <input type="text" id="shop-name-input" placeholder="مثال: محل الحارثي للتجارة">
+        </div>
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label>رقم الواتساب (مع رمز الدولة):</label>
+          <label>رقم واتساب المحل (مع رمز الدولة):</label>
           <input type="text" id="whatsapp-number-input" placeholder="967771234567">
         </div>
-        <button id="btn-save-settings" class="btn primary">حفظ الرقم</button>
+        <button id="btn-save-settings" class="btn primary">حفظ الإعدادات</button>
       </div>
     </dialog>
 
@@ -236,27 +230,21 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v9';
+    const STORAGE_KEY = 'shop_debt_ledger_v10';
     let state = { customers: [], transactions: [] };
     let shopWhatsapp = localStorage.getItem('shop_whatsapp_number') || '';
+    let shopName = localStorage.getItem('shop_custom_name') || 'سجل_ديون_المحل';
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
-      
-      // الفحص الإجباري: إذا فتح التطبيق وليس لديه عملاء أو حركات، يفتح نافذة الاستعادة إجبارياً
-      if ((!state.customers || state.customers.length === 0) && (!state.transactions || state.transactions.length === 0)) {
-        setTimeout(() => {
-          document.getElementById('force-restore-modal').showModal();
-        }, 500);
-      }
     }
 
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       const badge = document.getElementById('auto-save-status');
-      badge.textContent = '🟢 محفوظ ومؤمن';
-      setTimeout(() => { badge.textContent = '🟢 محفوظ ومؤمن'; }, 2500);
+      badge.textContent = '🟢 تم الحفظ والتحديث التراكمي';
+      setTimeout(() => { badge.textContent = '🟢 مؤمن ومحفوظ محلياً'; }, 2500);
       render();
     }
 
@@ -394,10 +382,57 @@
     document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
-    // معالجة الاستعادة الإجبارية عند فتح التطبيق في مكان جديد
-    document.getElementById('btn-force-restore').addEventListener('click', () => {
+    // الإعدادات (اسم المحل ورقم الواتساب)
+    const settingsModal = document.getElementById('settings-modal');
+    document.getElementById('btn-settings').addEventListener('click', () => {
+      document.getElementById('shop-name-input').value = shopName;
+      document.getElementById('whatsapp-number-input').value = shopWhatsapp;
+      settingsModal.showModal();
+    });
+
+    document.getElementById('btn-save-settings').addEventListener('click', () => {
+      shopName = document.getElementById('shop-name-input').value.trim() || 'سجل_ديون_المحل';
+      shopWhatsapp = document.getElementById('whatsapp-number-input').value.trim();
+      localStorage.setItem('shop_custom_name', shopName);
+      localStorage.setItem('shop_whatsapp_number', shopWhatsapp);
+      settingsModal.close();
+      alert('تم حفظ إعدادات المحل بنجاح!');
+    });
+
+    // إرسال النسخة التراكمية عبر الواتساب
+    document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
+      if (!shopWhatsapp) {
+        alert('يرجى تحديد رقم الواتساب أولاً من "⚙️ إعدادات المحل"');
+        settingsModal.showModal();
+        return;
+      }
+      const today = new Date().toISOString().slice(0,10);
+      const dataStr = JSON.stringify(state);
+      const msg = `📦 *${shopName} - النسخة التراكمية (${today})* 📦\n\nإليك كود البيانات المجمع:\n\`\`\`json\n${dataStr}\n\`\`\``;
+      window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    });
+
+    // نافذة النسخ والنص التراكمي
+    const textModal = document.getElementById('text-modal');
+    const textArea = document.getElementById('backup-text-area');
+
+    document.getElementById('btn-open-text').addEventListener('click', () => {
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('modal-backup-title').textContent = `نسخة تراكمية (${shopName} - ${today})`;
+      textArea.value = JSON.stringify(state, null, 2);
+      textModal.showModal();
+    });
+
+    document.getElementById('btn-copy-text').addEventListener('click', () => {
+      textArea.select();
+      navigator.clipboard.writeText(textArea.value).then(() => {
+        alert('تم نسخ الكود التراكمي بنجاح!');
+      });
+    });
+
+    document.getElementById('btn-restore-text').addEventListener('click', () => {
       try {
-        let val = document.getElementById('force-text-area').value.trim();
+        let val = textArea.value.trim();
         if (val.includes('```json')) {
           val = val.split('```json')[1].split('```')[0].trim();
         } else if (val.includes('```')) {
@@ -408,52 +443,15 @@
         if (parsed.customers && parsed.transactions) {
           state = parsed;
           saveState();
-          document.getElementById('force-restore-modal').close();
-          alert('تمت استعادة كافة البيانات بنجاح تام!');
+          textModal.close();
+          alert('تمت استعادة كافة البيانات بنجاح تام وتحديث الشاشة!');
         } else {
           alert('النص لا يحتوي على بيانات صحيحة.');
         }
       } catch (e) {
-        alert('خطأ في صيغة النص. تأكد من لصق كود البيانات الصحيح.');
+        alert('خطأ في صيغة النص. تأكد من لصق كود البيانات بشكل صحيح.');
       }
     });
 
-    // إعداد رقم الواتساب
-    const settingsModal = document.getElementById('settings-modal');
-    document.getElementById('btn-settings').addEventListener('click', () => {
-      document.getElementById('whatsapp-number-input').value = shopWhatsapp;
-      settingsModal.showModal();
-    });
-
-    document.getElementById('btn-save-settings').addEventListener('click', () => {
-      shopWhatsapp = document.getElementById('whatsapp-number-input').value.trim();
-      localStorage.setItem('shop_whatsapp_number', shopWhatsapp);
-      settingsModal.close();
-      alert('تم حفظ رقم الواتساب بنجاح!');
-    });
-
-    // إرسال النسخة التراكمية عبر الواتساب (مع تذكير أوتوماتيكي)
-    document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
-      if (!shopWhatsapp) {
-        alert('يرجى تحديد رقم الواتساب أولاً من إعدادات "⚙️ رقم المحل"');
-        settingsModal.showModal();
-        return;
-      }
-      const dataStr = JSON.stringify(state);
-      const msg = `📦 *سجل ديون المحل التراكمي*\n\n\`\`\`json\n${dataStr}\n\`\`\``;
-      window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
-    });
-
-    // النسخ والنص الاحتياطي العادي
-    const textModal = document.getElementById('text-modal');
-    const textArea = document.getElementById('backup-text-area');
-
-    document.getElementById('btn-open-text').addEventListener('click', () => {
-      textArea.value = JSON.stringify(state, null, 2);
-      textModal.showModal();
-    });
-
-    document.getElementById('btn-copy-text').addEventListener('click', () => {
-      textArea.select();
-      navigator.clipboard.writeText(textArea.value).then(() => {
-        alert('تم نسخ الكود الت
+    // تصدير Excel (CSV) بوضع اسم المحل كبصمة واضحة للملف
+    document.getElementById('btn-

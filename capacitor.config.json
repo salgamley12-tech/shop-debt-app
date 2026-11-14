@@ -1,0 +1,6 @@
+{
+  "appId": "com.algamley.shopdebt",
+  "appName": "سجل الديون",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

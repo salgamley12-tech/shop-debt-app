@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - سجل ديون المحل (نسخ تلقائي)</title>
+  <title>دفتري - سجل ديون المحل</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -72,11 +72,12 @@
   <header class="app-header">
     <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-backup" class="btn success">💾 تنزيل نسخة احتياطية باسم...</button>
+      <button id="btn-share-backup" class="btn success" style="background: #0284c7; color: #fff;">📤 مشاركة النسخة</button>
+      <button id="btn-backup" class="btn success">💾 تنزيل نسخة</button>
       <label class="btn secondary" style="cursor: pointer; display: inline-flex; align-items: center;">
-        📂 استعادة نسخة <input type="file" id="input-restore" accept=".json" hidden>
+        📂 استعادة <input type="file" id="input-restore" accept=".json" hidden>
       </label>
-      <button id="btn-export-csv" class="btn secondary">📊 تصدير Excel</button>
+      <button id="btn-export-csv" class="btn secondary">📊 Excel</button>
     </div>
   </header>
 
@@ -193,7 +194,7 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v4';
+    const STORAGE_KEY = 'shop_debt_ledger_v5';
     let state = { customers: [], transactions: [] };
 
     function loadState() {
@@ -201,20 +202,11 @@
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
     }
 
-    // دالة الحفظ والنسخ التلقائي الفوري مع كل حركة
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      // نسخة احتياطية إضافية آمنة داخل التخزين المحلي تتحدث مع كل عملية
-      localStorage.setItem(STORAGE_KEY + '_autobackup', JSON.stringify({
-        timestamp: new Date().toISOString(),
-        data: state
-      }));
-      
-      // إظهار تنبيه مرئي سريع بأن النسخ تم
       const badge = document.getElementById('auto-save-status');
       badge.textContent = '🟢 تم النسخ الاحتياطي تلقائياً';
       setTimeout(() => { badge.textContent = '🟢 النظام جاهز'; }, 2500);
-
       render();
     }
 
@@ -263,7 +255,6 @@
       document.getElementById('tx-amount').value = '';
       document.getElementById('tx-note').value = '';
       
-      // حفظ البيانات وإجراء النسخ التلقائي فوراً
       saveState();
     });
 
@@ -353,22 +344,42 @@
     document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
-    // زر تنزيل النسخة الاحتياطية اليدوية باسم مخصص
+    // ميزة مشاركة النسخة الاحتياطية مباشرة (عبر الواتساب أو التطبيقات الأخرى)
+    document.getElementById('btn-share-backup').addEventListener('click', async () => {
+      const today = new Date().toISOString().slice(0,10);
+      const fileName = `سجل_ديون_المحل_${today}.json`;
+      const jsonStr = JSON.stringify(state, null, 2);
+      const file = new File([jsonStr], fileName, { type: 'application/json' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'نسخة احتياطية - ديون المحل',
+            text: 'إليك النسخة الاحتياطية المحدثة لسجل ديون المحل.'
+          });
+        } catch (error) {
+          console.log('تم إلغاء المشاركة');
+        }
+      } else {
+        // بديل في حال عدم دعم المشاركة المباشرة (تنزيل عادي)
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+      }
+    });
+
     document.getElementById('btn-backup').addEventListener('click', () => {
       const today = new Date().toISOString().slice(0,10);
-      const defaultName = `سجل_ديون_المحل_${today}`;
-      const customName = prompt('اكتب اسماً لملف النسخة الاحتياطية:', defaultName);
-      if (customName === null) return;
-      
-      const fileName = (customName.trim() || defaultName) + '.json';
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = fileName;
+      a.download = `سجل_ديون_المحل_${today}.json`;
       a.click();
     });
 
-    // استعادة النسخة الاحتياطية من ملف
     document.getElementById('input-restore').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -391,7 +402,6 @@
       reader.readAsText(file);
     });
 
-    // تصدير Excel (CSV)
     document.getElementById('btn-export-csv').addEventListener('click', () => {
       const today = new Date().toISOString().slice(0,10);
       let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';

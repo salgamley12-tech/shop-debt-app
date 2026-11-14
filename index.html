@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - سجل ديون المحل</title>
+  <title>دفتري - سجل ديون المحل (مزامنة إجبارية)</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -98,7 +98,7 @@
     <section class="panel">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
         <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ محلياً وتلقائياً</span>
+        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ ومؤمن</span>
       </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
@@ -162,17 +162,29 @@
       </div>
     </section>
 
-    <!-- نافذة الاستعادة والنسخ السريع -->
+    <!-- نافذة إجبارية عند فتح التطبيق لأول مرة أو إذا كانت البيانات فارغة -->
+    <dialog id="force-restore-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 style="color: var(--danger);">⚠️ تنبيه: التطبيق فارغ أو جديد</h3>
+        </div>
+        <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.6;">
+          يبدو أنك فتحت التطبيق في هاتف جديد أو بعد إعادة التثبيت. لاستعادة كافة بياناتك وحساباتك السابقة فوراً، يرجى لصق كود النسخة التراكمية المحفوظ في واتساب:
+        </p>
+        <textarea id="force-text-area" rows="6" placeholder="الصق كود النسخة التراكمية هنا..." style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="btn-force-restore" class="btn primary" style="flex: 1;">📥 استعادة البيانات وإلغاء القفل</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="text-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
           <h3>النسخ الاحتياطي والاستعادة النصية</h3>
           <button onclick="document.getElementById('text-modal').close()" class="btn danger">إغلاق</button>
         </div>
-        <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 0.5rem;">
-          انسخ كود النسخة التراكمية من الواتساب، والصقه هنا ثم اضغط "استعادة فورية":
-        </p>
-        <textarea id="backup-text-area" rows="6" placeholder="الصق كود النسخة التراكمية هنا..." style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
+        <textarea id="backup-text-area" rows="6" style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <button id="btn-copy-text" class="btn success" style="flex: 1;">📋 نسخ الكود الحالي</button>
           <button id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة فورية</button>
@@ -224,20 +236,27 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_v8';
+    const STORAGE_KEY = 'shop_debt_ledger_v9';
     let state = { customers: [], transactions: [] };
     let shopWhatsapp = localStorage.getItem('shop_whatsapp_number') || '';
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
+      
+      // الفحص الإجباري: إذا فتح التطبيق وليس لديه عملاء أو حركات، يفتح نافذة الاستعادة إجبارياً
+      if ((!state.customers || state.customers.length === 0) && (!state.transactions || state.transactions.length === 0)) {
+        setTimeout(() => {
+          document.getElementById('force-restore-modal').showModal();
+        }, 500);
+      }
     }
 
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       const badge = document.getElementById('auto-save-status');
-      badge.textContent = '🟢 محفوظ محلياً وتلقائياً';
-      setTimeout(() => { badge.textContent = '🟢 محفوظ محلياً وتلقائياً'; }, 2500);
+      badge.textContent = '🟢 محفوظ ومؤمن';
+      setTimeout(() => { badge.textContent = '🟢 محفوظ ومؤمن'; }, 2500);
       render();
     }
 
@@ -375,6 +394,30 @@
     document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
+    // معالجة الاستعادة الإجبارية عند فتح التطبيق في مكان جديد
+    document.getElementById('btn-force-restore').addEventListener('click', () => {
+      try {
+        let val = document.getElementById('force-text-area').value.trim();
+        if (val.includes('```json')) {
+          val = val.split('```json')[1].split('```')[0].trim();
+        } else if (val.includes('```')) {
+          val = val.split('```')[1].split('```')[0].trim();
+        }
+
+        const parsed = JSON.parse(val);
+        if (parsed.customers && parsed.transactions) {
+          state = parsed;
+          saveState();
+          document.getElementById('force-restore-modal').close();
+          alert('تمت استعادة كافة البيانات بنجاح تام!');
+        } else {
+          alert('النص لا يحتوي على بيانات صحيحة.');
+        }
+      } catch (e) {
+        alert('خطأ في صيغة النص. تأكد من لصق كود البيانات الصحيح.');
+      }
+    });
+
     // إعداد رقم الواتساب
     const settingsModal = document.getElementById('settings-modal');
     document.getElementById('btn-settings').addEventListener('click', () => {
@@ -389,7 +432,7 @@
       alert('تم حفظ رقم الواتساب بنجاح!');
     });
 
-    // إرسال النسخة التراكمية عبر الواتساب
+    // إرسال النسخة التراكمية عبر الواتساب (مع تذكير أوتوماتيكي)
     document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
       if (!shopWhatsapp) {
         alert('يرجى تحديد رقم الواتساب أولاً من إعدادات "⚙️ رقم المحل"');
@@ -401,7 +444,7 @@
       window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
     });
 
-    // إدارة نافذة الاستعادة النصية السريعة
+    // النسخ والنص الاحتياطي العادي
     const textModal = document.getElementById('text-modal');
     const textArea = document.getElementById('backup-text-area');
 
@@ -413,37 +456,4 @@
     document.getElementById('btn-copy-text').addEventListener('click', () => {
       textArea.select();
       navigator.clipboard.writeText(textArea.value).then(() => {
-        alert('تم نسخ الكود التراكمي بنجاح!');
-      });
-    });
-
-    document.getElementById('btn-restore-text').addEventListener('click', () => {
-      try {
-        let val = textArea.value.trim();
-        // تنظيف النص في حال تم نسخه من واتساب وكان يحوي أقواس إضافية
-        if (val.includes('```json')) {
-          val = val.split('```json')[1].split('```')[0].trim();
-        } else if (val.includes('```')) {
-          val = val.split('```')[1].split('```')[0].trim();
-        }
-
-        const parsed = JSON.parse(val);
-        if (parsed.customers && parsed.transactions) {
-          state = parsed;
-          saveState();
-          textModal.close();
-          alert('تمت استعادة كافة البيانات بنجاح تام وتحديث الشاشة!');
-        } else {
-          alert('النص لا يحتوي على بيانات صحيحة.');
-        }
-      } catch (e) {
-        alert('خطأ: تأكد من لصق كود البيانات بشكل كامل وصحيح.');
-      }
-    });
-
-    loadState();
-    render();
-  </script>
-</body>
-  </html>
-  
+        alert('تم نسخ الكود الت

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سجل ديون المحل - تطبيق محلي</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --primary: #1e3a8a;
+      --secondary: #475569;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --border: #e2e8f0;
+      --text: #0f172a;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    .app-header {
+      background: var(--primary); color: #fff; padding: 1rem 1.5rem;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    }
+    .app-header h1 { margin: 0; font-size: 1.35rem; }
+    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .container { max-width: 1100px; margin: 1.25rem auto; padding: 0 1rem; }
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem; margin-bottom: 1.25rem;
+    }
+    .card {
+      background: var(--surface); padding: 1.15rem; border-radius: 8px;
+      border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card h3 { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--secondary); }
+    .amount { margin: 0; font-size: 1.5rem; font-weight: bold; }
+    .debit { color: var(--danger); }
+    .credit { color: var(--success); }
+    .panel {
+      background: var(--surface); padding: 1.25rem; border-radius: 8px;
+      border: 1px solid var(--border); margin-bottom: 1.25rem;
+    }
+    .panel h2 { margin-top: 0; font-size: 1.15rem; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.9rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group.full-width { grid-column: 1 / -1; }
+    label { font-size: 0.88rem; font-weight: 600; }
+    input, select { padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+    input:focus, select:focus { border-color: var(--primary); }
+    .btn {
+      padding: 0.6rem 1.1rem; border: none; border-radius: 6px; cursor: pointer;
+      font-weight: 600; font-size: 0.88rem; display: inline-block; text-align: center;
+    }
+    .btn.primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn.secondary { background: #e2e8f0; color: var(--text); }
+    .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
+    .file-label { display: inline-flex; align-items: center; cursor: pointer; }
+    .table-responsive { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: right; }
+    th, td { padding: 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { background: #f8fafc; font-weight: 700; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 800px; }
+    .modal::backdrop { background: rgba(0,0,0,0.5); }
+    .modal-content { padding: 1.25rem; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .modal-summary { display: flex; gap: 1.25rem; margin-bottom: 1rem; font-weight: bold; flex-wrap: wrap; }
+    @media print {
+      body * { visibility: hidden; }
+      #statement-modal, #statement-modal * { visibility: visible; }
+      #statement-modal { position: absolute; left: 0; top: 0; width: 100%; }
+      .btn { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>سجل ديون المحل</h1>
+    <div class="header-actions">
+      <button id="btn-export-csv" class="btn secondary">تصدير Excel</button>
+      <button id="btn-backup" class="btn secondary">نسخ احتياطي</button>
+      <label class="btn secondary file-label">
+        استعادة <input type="file" id="input-restore" accept=".json" hidden>
+      </label>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="summary-grid">
+      <div class="card">
+        <h3>إجمالي الديون (ريال يمني)</h3>
+        <p id="total-yer" class="amount debit">0</p>
+      </div>
+      <div class="card">
+        <h3>إجمالي الديون (ريال سعودي)</h3>
+        <p id="total-sar" class="amount debit">0</p>
+      </div>
+      <div class="card">
+        <h3>إجمالي الديون (دولار أمريكي)</h3>
+        <p id="total-usd" class="amount debit">0</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>تسجيل عملية مالية جديدة</h2>
+      <form id="transaction-form" class="form-grid">
+        <div class="form-group">
+          <label>اسم العميل</label>
+          <input type="text" id="customer-name" list="customers-list" required placeholder="ابحث أو اكتب اسماً جديداً">
+          <datalist id="customers-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف (اختياري)</label>
+          <input type="tel" id="customer-phone" placeholder="77xxxxxxx">
+        </div>
+        <div class="form-group">
+          <label>نوع العملية</label>
+          <select id="tx-type" required>
+            <option value="debt">دين جديد (عليه)</option>
+            <option value="payment">سداد دفعة (له)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>المبلغ</label>
+          <input type="number" id="tx-amount" step="0.01" min="0.01" required placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>العملة</label>
+          <select id="tx-currency" required>
+            <option value="YER">ريال يمني (YER)</option>
+            <option value="SAR">ريال سعودي (SAR)</option>
+            <option value="USD">دولار أمريكي (USD)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>البيان / التفاصيل</label>
+          <input type="text" id="tx-note" placeholder="مثال: بضاعة آجل، دفعة نقدية...">
+        </div>
+        <div class="form-group full-width">
+          <button type="submit" class="btn primary">حفظ العملية</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>أرصدة العملاء</h2>
+        <input type="search" id="search-input" placeholder="بحث بالاسم أو الرقم...">
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>العميل</th>
+              <th>الهاتف</th>
+              <th>رصيد (YER)</th>
+              <th>رصيد (SAR)</th>
+              <th>رصيد (USD)</th>
+              <th>آخر حركة</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="customers-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <dialog id="statement-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-customer-title">كشف حساب</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button onclick="window.print()" class="btn secondary">طباعة</button>
+            <button id="close-modal" class="btn danger">إغلاق</button>
+          </div>
+        </div>
+        <div id="modal-balances" class="modal-summary"></div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>التاريخ</th>
+                <th>النوع</th>
+                <th>المبلغ</th>
+                <th>العملة</th>
+                <th>البيان</th>
+                <th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="statement-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </dialog>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'shop_debt_ledger_v1';
+    let state = { customers: [], transactions: [] };
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render();
+    }
+
+    function getCustomerBalances(customerId) {
+      const balances = { YER: 0, SAR: 0, USD: 0 };
+      state.transactions
+        .filter(t => t.customerId === customerId)
+        .forEach(t => {
+          const val = parseFloat(t.amount);
+          if (t.type === 'debt') balances[t.currency] += val;
+          else balances[t.currency] -= val;
+        });
+      return balances;
+    }
+
+    document.getElementById('transaction-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('customer-name').value.trim();
+      const phone = document.getElementById('customer-phone').value.trim();
+      const type = document.getElementById('tx-type').value;
+      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const currency = document.getElementById('tx-currency').value;
+      const note = document.getElementById('tx-note').value.trim();
+
+      if (!name || isNaN(amount) || amount <= 0) return;
+
+      let customer = state.customers.find(c => c.name === name);
+      const now = new Date().toISOString();
+
+      if (!customer) {
+        customer = { id: 'cust_' + Date.now(), name, phone, updatedAt: now };
+        state.customers.push(customer);
+      } else {
+        if (phone) customer.phone = phone;
+        customer.updatedAt = now;
+      }
+
+      state.transactions.push({
+        id: 'tx_' + Date.now() + Math.random().toString(36).substr(2, 4),
+        customerId: customer.id,
+        type, amount, currency, note, date: now
+      });
+
+      e.target.reset();
+      saveState();
+    });
+
+    function render(filterText = '') {
+      const tbody = document.getElementById('customers-table-body');
+      const datalist = document.getElementById('customers-list');
+      tbody.innerHTML = '';
+      datalist.innerHTML = '';
+
+      const totals = { YER: 0, SAR: 0, USD: 0 };
+      const sortedCustomers = [...state.customers].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      sortedCustomers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        datalist.appendChild(opt);
+
+        const bal = getCustomerBalances(c.id);
+        totals.YER += bal.YER;
+        totals.SAR += bal.SAR;
+        totals.USD += bal.USD;
+
+        if (filterText && !c.name.includes(filterText) && !(c.phone && c.phone.includes(filterText))) return;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${c.name}</strong></td>
+          <td>${c.phone || '-'}</td>
+          <td class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</td>
+          <td class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</td>
+          <td class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</td>
+          <td>${new Date(c.updatedAt).toLocaleDateString('ar-YE')}</td>
+          <td><button class="btn secondary" onclick="openStatement('${c.id}')">كشف حساب</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('total-yer').textContent = totals.YER.toLocaleString();
+      document.getElementById('total-sar').textContent = totals.SAR.toLocaleString();
+      document.getElementById('total-usd').textContent = totals.USD.toLocaleString();
+    }
+
+    const modal = document.getElementById('statement-modal');
+    window.openStatement = function(customerId) {
+      const customer = state.customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      document.getElementById('modal-customer-title').textContent = `كشف حساب: ${customer.name}`;
+      const bal = getCustomerBalances(customerId);
+      document.getElementById('modal-balances').innerHTML = `
+        <span>يمني: ${bal.YER.toLocaleString()}</span>
+        <span>سعودي: ${bal.SAR.toLocaleString()}</span>
+        <span>دولار: ${bal.USD.toLocaleString()}</span>
+      `;
+
+      const tbody = document.getElementById('statement-body');
+      tbody.innerHTML = '';
+      const txs = state.transactions.filter(t => t.customerId === customerId).reverse();
+
+      txs.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${new Date(t.date).toLocaleString('ar-YE')}</td>
+          <td>${t.type === 'debt' ? 'دين عليه' : 'سداد منه'}</td>
+          <td>${t.amount.toLocaleString()}</td>
+          <td>${t.currency}</td>
+          <td>${t.note || '-'}</td>
+          <td><button class="btn danger" onclick="deleteTransaction('${t.id}', '${customerId}')">×</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      modal.showModal();
+    };
+
+    window.deleteTransaction = function(txId, customerId) {
+      if (!confirm('تأكيد حذف هذه العملية؟')) return;
+      state.transactions = state.transactions.filter(t => t.id !== txId);
+      saveState();
+      openStatement(customerId);
+    };
+
+    document.getElementById('close-modal').addEventListener('click', () => modal.close());
+    document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
+
+    document.getElementById('btn-backup').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `debts-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    });
+
+    document.getElementById('input-restore').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (imported.customers && imported.transactions) {
+            state = imported;
+            saveState();
+            alert('تمت استعادة البيانات بنجاح');
+          }
+        } catch { alert('ملف غير صالح'); }
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+      let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';
+      state.transactions.forEach(t => {
+        const c = state.customers.find(cust => cust.id === t.customerId) || {};
+        const typeLabel = t.type === 'debt' ? 'دين' : 'سداد';
+        csv += `"${c.name || ''}","${c.phone || ''}","${t.currency}","${typeLabel}",${t.amount},"${t.note || ''}","${t.date}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `shop-debts-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    });
+
+    loadState();
+    render();
+  </script>
+</body>
+</html>

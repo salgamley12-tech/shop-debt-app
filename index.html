@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتر الصندوق - الحسابات النقدية اليومية</title>
+  <title>دفتري - سجل ديون المحل (نسخ تلقائي على الذاكرة)</title>
   <style>
     :root {
       --bg: #f4f6f9;
       --surface: #ffffff;
-      --primary: #0f766e; /* لون أخضر بترولي خاص بالخزينة والصندوق */
+      --primary: #1e3a8a;
       --secondary: #475569;
       --danger: #dc2626;
       --success: #16a34a;
@@ -35,8 +35,8 @@
     }
     .card h3 { margin: 0 0 0.4rem; font-size: 0.9rem; color: var(--secondary); }
     .amount { margin: 0; font-size: 1.5rem; font-weight: bold; }
-    .positive { color: var(--success); }
-    .negative { color: var(--danger); }
+    .debit { color: var(--danger); }
+    .credit { color: var(--success); }
     .panel {
       background: var(--surface); padding: 1.25rem; border-radius: 8px;
       border: 1px solid var(--border); margin-bottom: 1.25rem;
@@ -55,7 +55,8 @@
     }
     .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
-    .btn.whatsapp { background: var(--whatsapp); color: #fff; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .btn.file-sync { background: #0284c7; color: #fff; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .btn.file-sync.linked { background: var(--success); }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
@@ -65,276 +66,410 @@
     .modal::backdrop { background: rgba(0,0,0,0.5); }
     .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .auto-save-badge { font-size: 0.75rem; background: #dcfce7; color: #166534; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; margin-top: 0.3rem; }
+    .modal-summary { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-weight: bold; flex-wrap: wrap; background: #f8fafc; padding: 0.8rem; border-radius: 6px; }
+    .auto-save-badge { font-size: 0.75rem; background: #dcfce7; color: #166534; padding: 0.25rem 0.6rem; border-radius: 4px; display: inline-block; }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <h1>دفتر الصندوق - الحسابات النقدية</h1>
+    <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-whatsapp-sync" class="btn whatsapp">💬 إرسال نسخة واتساب</button>
-      <button id="btn-open-text" class="btn secondary">📥 استعادة نصية</button>
-      <button id="btn-settings" class="btn secondary">⚙️ رقم الخزينة</button>
+      <button type="button" id="btn-link-file" class="btn file-sync">💾 ربط ملف في الذاكرة (بدون نت)</button>
+      <button type="button" id="btn-load-file" class="btn secondary">📂 استيراد من الذاكرة</button>
+      <button type="button" id="btn-open-text" class="btn secondary">📋 نسخ/استعادة نصية</button>
     </div>
   </header>
 
   <main class="container">
     <section class="summary-grid">
       <div class="card">
-        <h3>رصيد الصندوق (يمني YER)</h3>
-        <p id="total-yer" class="amount positive">0</p>
+        <h3>إجمالي الديون (يمني YER)</h3>
+        <p id="total-yer" class="amount debit">0</p>
       </div>
       <div class="card">
-        <h3>رصيد الصندوق (سعودي SAR)</h3>
-        <p id="total-sar" class="amount positive">0</p>
+        <h3>إجمالي الديون (سعودي SAR)</h3>
+        <p id="total-sar" class="amount debit">0</p>
       </div>
       <div class="card">
-        <h3>رصيد الصندوق (دولار USD)</h3>
-        <p id="total-usd" class="amount positive">0</p>
+        <h3>إجمالي الديون (دولار USD)</h3>
+        <p id="total-usd" class="amount debit">0</p>
       </div>
     </section>
 
     <section class="panel">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <h2 style="margin: 0;">تسجيل حركة نقدية جديدة</h2>
-        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ ومؤمن</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+        <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
+        <span id="auto-save-status" class="auto-save-badge">🟢 محفوظ محلياً (غير مربوط بملف خارجي بعد)</span>
       </div>
-      <form id="cash-form" class="form-grid">
+      <form id="transaction-form" class="form-grid">
         <div class="form-group">
-          <label>نوع الحركة</label>
-          <select id="cash-type" required>
-            <option value="in">إيراد / مقبوضات (داخل للصندوق)</option>
-            <option value="out">مصروف / مدفوعات (خارج من الصندوق)</option>
+          <label>اسم العميل</label>
+          <input type="text" id="customer-name" list="customers-list" required autocomplete="off" placeholder="اكتب اسم العميل...">
+          <datalist id="customers-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف (اختياري)</label>
+          <input type="tel" id="customer-phone" placeholder="77xxxxxxx">
+        </div>
+        <div class="form-group">
+          <label>نوع العملية</label>
+          <select id="tx-type" required>
+            <option value="debt">دين جديد (عليه / آجل)</option>
+            <option value="payment">سداد دفعة (له / مقبوضات)</option>
           </select>
         </div>
         <div class="form-group">
           <label>المبلغ</label>
-          <input type="number" id="cash-amount" step="0.01" min="0.01" required placeholder="0.00">
+          <input type="number" id="tx-amount" step="0.01" min="0.01" required placeholder="0.00">
         </div>
         <div class="form-group">
           <label>العملة</label>
-          <select id="cash-currency" required>
+          <select id="tx-currency" required>
             <option value="YER">ريال يمني (YER)</option>
             <option value="SAR">ريال سعودي (SAR)</option>
             <option value="USD">دولار أمريكي (USD)</option>
           </select>
         </div>
-        <div class="form-group full-width">
-          <label>البيان / جهة الصرف أو القبض / ملاحظة</label>
-          <input type="text" id="cash-note" required placeholder="مثال: مبيعات نقدية، فاتورة كهرباء، إيجار...">
+        <div class="form-group">
+          <label>البيان / ملاحظة</label>
+          <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، دفعة نقدية...">
         </div>
         <div class="form-group full-width">
-          <button type="submit" class="btn primary">حفظ الحركة وتحديث الصندوق فوراً</button>
+          <button type="submit" class="btn primary">حفظ العملية والتحديث الفوري</button>
         </div>
       </form>
     </section>
 
     <section class="panel">
       <div class="panel-header">
-        <h2>سجل الحركات النقدية</h2>
-        <input type="search" id="search-input" placeholder="🔍 ابحث في البيان..." style="min-width: 250px;">
+        <h2>حسابات العملاء والديون</h2>
+        <input type="search" id="search-input" placeholder="🔍 ابحث بالاسم أو رقم الهاتف..." style="min-width: 250px;">
       </div>
       <div class="table-responsive">
         <table>
           <thead>
             <tr>
-              <th>التاريخ والوقت</th>
-              <th>النوع</th>
-              <th>المبلغ</th>
-              <th>العملة</th>
-              <th>البيان</th>
-              <th>حذف</th>
+              <th>العميل</th>
+              <th>الهاتف</th>
+              <th>رصيد (YER)</th>
+              <th>رصيد (SAR)</th>
+              <th>رصيد (USD)</th>
+              <th>آخر حركة</th>
+              <th>كشف الحساب</th>
             </tr>
           </thead>
-          <tbody id="cash-table-body"></tbody>
+          <tbody id="customers-table-body"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- نافذة النسخ النصي والاستعادة -->
+    <!-- نافذة النسخ النصي الاحتياطي -->
     <dialog id="text-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
           <h3>النسخ الاحتياطي والاستعادة النصية</h3>
-          <button onclick="document.getElementById('text-modal').close()" class="btn danger">إغلاق</button>
+          <button type="button" onclick="document.getElementById('text-modal').close()" class="btn danger">إغلاق</button>
         </div>
         <textarea id="backup-text-area" rows="6" placeholder="كود النسخة التراكمية..." style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 0.5rem; margin-bottom: 0.8rem;"></textarea>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button id="btn-copy-text" class="btn secondary" style="flex: 1;">📋 نسخ الكود</button>
-          <button id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة البيانات</button>
+          <button type="button" id="btn-copy-text" class="btn secondary" style="flex: 1;">📋 نسخ الكود الحالي</button>
+          <button type="button" id="btn-restore-text" class="btn primary" style="flex: 1;">📥 استعادة فورية</button>
         </div>
       </div>
     </dialog>
 
-    <dialog id="settings-modal" class="modal">
+    <dialog id="statement-modal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>إعداد رقم الواتساب للخزينة</h3>
-          <button onclick="document.getElementById('settings-modal').close()" class="btn danger">إغلاق</button>
+          <h3 id="modal-customer-title">كشف حساب العميل</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" onclick="window.print()" class="btn secondary">🖨️ طباعة</button>
+            <button type="button" id="close-modal" class="btn danger">إغلاق</button>
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom: 1rem;">
-          <label>رقم واتساب الإدارة (مع رمز الدولة):</label>
-          <input type="text" id="whatsapp-number-input" placeholder="967771234567">
+        <div id="modal-balances" class="modal-summary"></div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>التاريخ والوقت</th>
+                <th>نوع الحركة</th>
+                <th>المبلغ</th>
+                <th>العملة</th>
+                <th>البيان</th>
+                <th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="statement-body"></tbody>
+          </table>
         </div>
-        <button id="btn-save-settings" class="btn primary">حفظ الرقم</button>
       </div>
     </dialog>
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_cash_box_v1';
-    let state = { transactions: [] };
-    let shopWhatsapp = localStorage.getItem('cash_whatsapp_number') || '';
+    const STORAGE_KEY = 'shop_debt_ledger_offline_v1';
+    let state = { customers: [], transactions: [] };
+    let fileHandle = null;
 
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
     }
 
-    function saveState() {
+    async function writeToExternalFile() {
+      if (!fileHandle) return false;
+      try {
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(state, null, 2));
+        await writable.close();
+        return true;
+      } catch (err) {
+        console.error('فشلت الكتابة للملف:', err);
+        fileHandle = null;
+        updateLinkButton(false);
+        return false;
+      }
+    }
+
+    function updateLinkButton(isLinked, fileName = '') {
+      const btn = document.getElementById('btn-link-file');
+      const badge = document.getElementById('auto-save-status');
+      if (isLinked) {
+        btn.textContent = `✅ مربوط: ${fileName}`;
+        btn.classList.add('linked');
+        badge.textContent = `🟢 مؤمن ومكتوب تلقائياً في الذاكرة (${fileName})`;
+      } else {
+        btn.textContent = '💾 ربط ملف في الذاكرة (بدون نت)';
+        btn.classList.remove('linked');
+        badge.textContent = '🟢 محفوظ في المتصفح (اربط ملفاً للنسخ الخارجي)';
+      }
+    }
+
+    async function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       const badge = document.getElementById('auto-save-status');
-      badge.textContent = '🟢 تم الحفظ والتحديث التراكمي';
-      setTimeout(() => { badge.textContent = '🟢 محفوظ ومؤمن'; }, 2500);
+      
+      if (fileHandle) {
+        const ok = await writeToExternalFile();
+        if (ok) {
+          badge.textContent = `🟢 تم التحديث التراكمي في الملف (${fileHandle.name}) بدون نت`;
+        }
+      } else {
+        badge.textContent = '🟢 تم الحفظ في المتصفح';
+      }
       render();
     }
 
-    function sendCumulativeWhatsApp() {
-      if (!shopWhatsapp) {
-        alert('يرجى تحديد رقم الواتساب أولاً من "⚙️ رقم الخزينة"');
-        document.getElementById('settings-modal').showModal();
+    // ربط ملف جديد أو موجود في ذاكرة الهاتف/الجهاز للكتابة التراكمية الصامتة
+    document.getElementById('btn-link-file').addEventListener('click', async () => {
+      if (!window.showSaveFilePicker) {
+        alert('متصفحك الحالي لا يدعم الربط المباشر بالملفات. يرجى استخدام متصفح Chrome الحديث أو استخدم خيار "نسخ/استعادة نصية".');
         return;
       }
-      const dataStr = JSON.stringify(state);
-      const msg = `💰 *دفتر الصندوق اليومي - النسخة التراكمية* 💰\n\n\`\`\`json\n${dataStr}\n\`\`\``;
-      window.open(`https://wa.me/${shopWhatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: 'سجل_ديون_المحل_التراكمي.json',
+          types: [{
+            description: 'ملف قاعدة بيانات الديون (JSON)',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const ok = await writeToExternalFile();
+        if (ok) {
+          updateLinkButton(true, fileHandle.name);
+          alert(`تم ربط الملف "${fileHandle.name}" بنجاح! سيتم تحديث هذا الملف تلقائياً وبصمت مع كل عملية بدون إنترنت.`);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          alert('تعذر ربط الملف: ' + err.message);
+        }
+      }
+    });
+
+    // استيراد بيانات من ملف محفوظ في ذاكرة الهاتف (عند تغيير الهاتف أو إعادة التثبيت)
+    document.getElementById('btn-load-file').addEventListener('click', async () => {
+      if (window.showOpenFilePicker) {
+        try {
+          const [handle] = await window.showOpenFilePicker({
+            types: [{
+              description: 'ملف قاعدة بيانات الديون (JSON)',
+              accept: { 'application/json': ['.json'] }
+            }]
+          });
+          const file = await handle.getFile();
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          if (parsed.customers && parsed.transactions) {
+            state = parsed;
+            fileHandle = handle; // ربط نفس الملف تلقائياً للمتابعة عليه
+            updateLinkButton(true, fileHandle.name);
+            await saveState();
+            alert(`تمت استعادة البيانات وربط الملف "${fileHandle.name}" بنجاح!`);
+          } else {
+            alert('الملف المختار لا يحتوي على بيانات ديون صالحة.');
+          }
+        } catch (err) {
+          if (err.name !== 'AbortError') alert('خطأ أثناء قراءة الملف.');
+        }
+      } else {
+        // بديل للمتصفحات القديمة عبر input file
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            try {
+              const parsed = JSON.parse(ev.target.result);
+              if (parsed.customers && parsed.transactions) {
+                state = parsed;
+                saveState();
+                alert('تمت استعادة البيانات بنجاح!');
+              }
+            } catch { alert('ملف غير صالح.'); }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      }
+    });
+
+    function getCustomerBalances(customerId) {
+      const balances = { YER: 0, SAR: 0, USD: 0 };
+      state.transactions
+        .filter(t => t.customerId === customerId)
+        .forEach(t => {
+          const val = parseFloat(t.amount);
+          if (t.type === 'debt') balances[t.currency] += val;
+          else balances[t.currency] -= val;
+        });
+      return balances;
     }
 
-    document.getElementById('cash-form').addEventListener('submit', (e) => {
+    document.getElementById('transaction-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const type = document.getElementById('cash-type').value;
-      const amount = parseFloat(document.getElementById('cash-amount').value);
-      const currency = document.getElementById('cash-currency').value;
-      const note = document.getElementById('cash-note').value.trim();
+      const name = document.getElementById('customer-name').value.trim();
+      const phone = document.getElementById('customer-phone').value.trim();
+      const type = document.getElementById('tx-type').value;
+      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const currency = document.getElementById('tx-currency').value;
+      const note = document.getElementById('tx-note').value.trim();
 
-      if (isNaN(amount) || amount <= 0 || !note) return;
+      if (!name || isNaN(amount) || amount <= 0) return;
+
+      let customer = state.customers.find(c => c.name.toLowerCase() === name.toLowerCase());
+      const now = new Date().toISOString();
+
+      if (!customer) {
+        customer = { id: 'cust_' + Date.now(), name, phone, updatedAt: now };
+        state.customers.push(customer);
+      } else {
+        if (phone) customer.phone = phone;
+        customer.updatedAt = now;
+      }
 
       state.transactions.push({
-        id: 'c_tx_' + Date.now() + Math.random().toString(36).substr(2, 4),
-        type, amount, currency, note, date: new Date().toISOString()
+        id: 'tx_' + Date.now() + Math.random().toString(36).substr(2, 4),
+        customerId: customer.id,
+        type, amount, currency, note, date: now
       });
 
-      document.getElementById('cash-amount').value = '';
-      document.getElementById('cash-note').value = '';
-
-      saveState();
-      sendCumulativeWhatsApp();
+      document.getElementById('customer-name').value = '';
+      document.getElementById('customer-phone').value = '';
+      document.getElementById('tx-amount').value = '';
+      document.getElementById('tx-note').value = '';
+      
+      await saveState();
     });
 
     function render(filterText = '') {
-      const tbody = document.getElementById('cash-table-body');
+      const tbody = document.getElementById('customers-table-body');
+      const datalist = document.getElementById('customers-list');
       tbody.innerHTML = '';
+      datalist.innerHTML = '';
 
       const totals = { YER: 0, SAR: 0, USD: 0 };
-      
-      const sortedTxs = [...state.transactions].reverse();
+      const sortedCustomers = [...state.customers].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
-      sortedTxs.forEach(t => {
-        const val = parseFloat(t.amount);
-        if (t.type === 'in') totals[t.currency] += val;
-        else totals[t.currency] -= val;
+      sortedCustomers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        datalist.appendChild(opt);
 
-        if (filterText && !t.note.toLowerCase().includes(filterText.toLowerCase())) return;
+        const bal = getCustomerBalances(c.id);
+        totals.YER += bal.YER;
+        totals.SAR += bal.SAR;
+        totals.USD += bal.USD;
+
+        const matchesSearch = !filterText || 
+          c.name.toLowerCase().includes(filterText.toLowerCase()) || 
+          (c.phone && c.phone.includes(filterText));
+
+        if (!matchesSearch) return;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${new Date(t.date).toLocaleString('ar-YE')}</td>
-          <td><span style="color: ${t.type === 'in' ? 'var(--success)' : 'var(--danger)'}; font-weight: bold;">${t.type === 'in' ? 'إيراد (داخل)' : 'مصروف (خارج)'}</span></td>
-          <td><strong>${val.toLocaleString()}</strong></td>
-          <td>${t.currency}</td>
-          <td>${t.note}</td>
-          <td><button class="btn danger" onclick="deleteTransaction('${t.id}')">حذف</button></td>
+          <td><strong>${c.name}</strong></td>
+          <td>${c.phone || '-'}</td>
+          <td class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</td>
+          <td class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</td>
+          <td class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</td>
+          <td>${new Date(c.updatedAt).toLocaleDateString('ar-YE')}</td>
+          <td><button type="button" class="btn secondary" onclick="openStatement('${c.id}')">كشف حساب</button></td>
         `;
         tbody.appendChild(tr);
       });
 
       document.getElementById('total-yer').textContent = totals.YER.toLocaleString();
-      document.getElementById('total-yer').className = `amount ${totals.YER >= 0 ? 'positive' : 'negative'}`;
-      
       document.getElementById('total-sar').textContent = totals.SAR.toLocaleString();
-      document.getElementById('total-sar').className = `amount ${totals.SAR >= 0 ? 'positive' : 'negative'}`;
-      
       document.getElementById('total-usd').textContent = totals.USD.toLocaleString();
-      document.getElementById('total-usd').className = `amount ${totals.USD >= 0 ? 'positive' : 'negative'}`;
     }
 
-    window.deleteTransaction = function(txId) {
-      if (!confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) return;
-      state.transactions = state.transactions.filter(t => t.id !== txId);
-      saveState();
-      sendCumulativeWhatsApp();
+    const modal = document.getElementById('statement-modal');
+    window.openStatement = function(customerId) {
+      const customer = state.customers.find(c => c.id === customerId);
+      if (!customer) return;
+
+      document.getElementById('modal-customer-title').textContent = `كشف حساب: ${customer.name} (${customer.phone || 'بدون هاتف'})`;
+      const bal = getCustomerBalances(customerId);
+      document.getElementById('modal-balances').innerHTML = `
+        <span>رصيد يمني: <strong class="${bal.YER > 0 ? 'debit' : 'credit'}">${bal.YER.toLocaleString()}</strong></span>
+        <span>رصيد سعودي: <strong class="${bal.SAR > 0 ? 'debit' : 'credit'}">${bal.SAR.toLocaleString()}</strong></span>
+        <span>رصيد دولار: <strong class="${bal.USD > 0 ? 'debit' : 'credit'}">${bal.USD.toLocaleString()}</strong></span>
+      `;
+
+      const tbody = document.getElementById('statement-body');
+      tbody.innerHTML = '';
+      const txs = state.transactions.filter(t => t.customerId === customerId).reverse();
+
+      txs.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${new Date(t.date).toLocaleString('ar-YE')}</td>
+          <td><span style="color: ${t.type === 'debt' ? 'var(--danger)' : 'var(--success)'}; font-weight: bold;">${t.type === 'debt' ? 'دين (عليه)' : 'سداد (له)'}</span></td>
+          <td><strong>${t.amount.toLocaleString()}</strong></td>
+          <td>${t.currency}</td>
+          <td>${t.note || '-'}</td>
+          <td><button type="button" class="btn danger" onclick="deleteTransaction('${t.id}', '${customerId}')">حذف</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      modal.showModal();
     };
 
+    window.deleteTransaction = async function(txId, customerId) {
+      if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
+      state.transactions = state.transactions.filter(t => t.id !== txId);
+      await saveState();
+      openStatement(customerId);
+    };
+
+    document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
-    const settingsModal = document.getElementById('settings-modal');
-    document.getElementById('btn-settings').addEventListener('click', () => {
-      document.getElementById('whatsapp-number-input').value = shopWhatsapp;
-      settingsModal.showModal();
-    });
-
-    document.getElementById('btn-save-settings').addEventListener('click', () => {
-      shopWhatsapp = document.getElementById('whatsapp-number-input').value.trim();
-      localStorage.setItem('cash_whatsapp_number', shopWhatsapp);
-      settingsModal.close();
-      alert('تم حفظ رقم الواتساب بنجاح!');
-    });
-
-    document.getElementById('btn-whatsapp-sync').addEventListener('click', () => {
-      sendCumulativeWhatsApp();
-    });
-
     const textModal = document.getElementById('text-modal');
-    const textArea = document.getElementById('backup-text-area');
-
-    document.getElementById('btn-open-text').addEventListener('click', () => {
-      textArea.value = JSON.stringify(state, null, 2);
-      textModal.showModal();
-    });
-
-    document.getElementById('btn-copy-text').addEventListener('click', () => {
-      textArea.select();
-      navigator.clipboard.writeText(textArea.value).then(() => {
-        alert('تم نسخ كود الصندوق بنجاح!');
-      });
-    });
-
-    document.getElementById('btn-restore-text').addEventListener('click', () => {
-      try {
-        let val = textArea.value.trim();
-        if (val.includes('```json')) {
-          val = val.split('```json')[1].split('```')[0].trim();
-        } else if (val.includes('```')) {
-          val = val.split('```')[1].split('```')[0].trim();
-        }
-
-        const parsed = JSON.parse(val);
-        if (parsed.transactions) {
-          state = parsed;
-          saveState();
-          textModal.close();
-          alert('تمت استعادة حسابات الصندوق بنجاح تام!');
-        } else {
-          alert('النص لا يحتوي على بيانات صندوق صحيحة.');
-        }
-      } catch (e) {
-        alert('خطأ في تنسيق النص.');
-      }
-    });
-
-    loadState();
-    render();
-  </script>
-</body>
-            </html>
-            
+    const textArea = d

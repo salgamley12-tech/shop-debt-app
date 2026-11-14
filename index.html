@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>دفتري - إدارة ديون المحل مع المزامنة السحابية</title>
+  <title>دفتري - سجل ديون المحل (نسخ تلقائي)</title>
   <style>
     :root {
       --bg: #f4f6f9;
@@ -54,25 +54,29 @@
     }
     .btn.primary { background: var(--primary); color: #fff; width: 100%; font-size: 1rem; padding: 0.8rem; }
     .btn.secondary { background: #e2e8f0; color: var(--text); }
+    .btn.success { background: var(--success); color: #fff; }
     .btn.danger { background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; }
     .table-responsive { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: right; }
     th, td { padding: 0.8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
     th { background: #f8fafc; font-weight: 700; }
-    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 600px; }
+    .modal { border: none; border-radius: 8px; padding: 0; width: 92%; max-width: 750px; }
     .modal::backdrop { background: rgba(0,0,0,0.5); }
     .modal-content { padding: 1.5rem; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .modal-summary { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-weight: bold; flex-wrap: wrap; background: #f8fafc; padding: 0.8rem; border-radius: 6px; }
+    .auto-save-badge { font-size: 0.75rem; background: #dcfce7; color: #166534; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; margin-top: 0.3rem; }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <h1>دفتري - إدارة ديون المحل (سحابي آمن)</h1>
+    <h1>دفتري - سجل ديون المحل</h1>
     <div class="header-actions">
-      <button id="btn-sync-cloud" class="btn secondary" style="background: #2563eb; color: #fff;">☁️ مزامنة سحابية</button>
-      <button id="btn-backup" class="btn secondary">نسخ ملفي</button>
-      <button id="btn-export-csv" class="btn secondary">تصدير Excel</button>
+      <button id="btn-backup" class="btn success">💾 تنزيل نسخة احتياطية باسم...</button>
+      <label class="btn secondary" style="cursor: pointer; display: inline-flex; align-items: center;">
+        📂 استعادة نسخة <input type="file" id="input-restore" accept=".json" hidden>
+      </label>
+      <button id="btn-export-csv" class="btn secondary">📊 تصدير Excel</button>
     </div>
   </header>
 
@@ -93,7 +97,10 @@
     </section>
 
     <section class="panel">
-      <h2>تسجيل عملية جديدة (دين أو سداد)</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h2 style="margin: 0;">تسجيل عملية جديدة (دين أو سداد)</h2>
+        <span id="auto-save-status" class="auto-save-badge">🟢 تم النسخ التلقائي</span>
+      </div>
       <form id="transaction-form" class="form-grid">
         <div class="form-group">
           <label>اسم العميل</label>
@@ -125,10 +132,10 @@
         </div>
         <div class="form-group">
           <label>البيان / ملاحظة</label>
-          <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، كيس حبة...">
+          <input type="text" id="tx-note" placeholder="مثال: قيمة بضاعة، دفعة نقدية...">
         </div>
         <div class="form-group full-width">
-          <button type="submit" class="btn primary">حفظ وتحديث الحساب فوراً</button>
+          <button type="submit" class="btn primary">حفظ العملية والنسخ التلقائي</button>
         </div>
       </form>
     </section>
@@ -155,25 +162,6 @@
         </table>
       </div>
     </section>
-
-    <!-- نافذة المزامنة السحابية -->
-    <dialog id="sync-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>إدارة المزامنة السحابية</h3>
-          <button onclick="document.getElementById('sync-modal').close()" class="btn danger">إغلاق</button>
-        </div>
-        <p style="font-size: 0.9rem; color: var(--secondary);">احفظ كود المزامنة الخاص بك لاستعادته في أي جهاز آخر:</p>
-        <div class="form-group" style="margin-bottom: 1rem;">
-          <label>كود سحابة المحل:</label>
-          <input type="text" id="sync-code-input" placeholder="مثال: shop_algamley_123">
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <button id="btn-cloud-save" class="btn primary">رفع وحفظ للسحابة</button>
-          <button id="btn-cloud-load" class="btn secondary">استعادة من السحابة</button>
-        </div>
-      </div>
-    </dialog>
 
     <dialog id="statement-modal" class="modal">
       <div class="modal-content">
@@ -205,7 +193,7 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'shop_debt_ledger_cloud_v1';
+    const STORAGE_KEY = 'shop_debt_ledger_v4';
     let state = { customers: [], transactions: [] };
 
     function loadState() {
@@ -213,8 +201,20 @@
       if (raw) { try { state = JSON.parse(raw); } catch (e) { console.error(e); } }
     }
 
+    // دالة الحفظ والنسخ التلقائي الفوري مع كل حركة
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // نسخة احتياطية إضافية آمنة داخل التخزين المحلي تتحدث مع كل عملية
+      localStorage.setItem(STORAGE_KEY + '_autobackup', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        data: state
+      }));
+      
+      // إظهار تنبيه مرئي سريع بأن النسخ تم
+      const badge = document.getElementById('auto-save-status');
+      badge.textContent = '🟢 تم النسخ الاحتياطي تلقائياً';
+      setTimeout(() => { badge.textContent = '🟢 النظام جاهز'; }, 2500);
+
       render();
     }
 
@@ -262,6 +262,8 @@
       document.getElementById('customer-phone').value = '';
       document.getElementById('tx-amount').value = '';
       document.getElementById('tx-note').value = '';
+      
+      // حفظ البيانات وإجراء النسخ التلقائي فوراً
       saveState();
     });
 
@@ -351,61 +353,47 @@
     document.getElementById('close-modal').addEventListener('click', () => modal.close());
     document.getElementById('search-input').addEventListener('input', (e) => render(e.target.value.trim()));
 
-    // نافذة المزامنة
-    const syncModal = document.getElementById('sync-modal');
-    document.getElementById('btn-sync-cloud').addEventListener('click', () => {
-      syncModal.showModal();
-    });
-
-    document.getElementById('btn-cloud-save').addEventListener('click', async () => {
-      const code = document.getElementById('sync-code-input').value.trim();
-      if (!code) { alert('يرجى كتابة كود المزامنة الخاص بالمحل'); return; }
-      
-      try {
-        localStorage.setItem('shop_sync_code', code);
-        // حفظ سحابي افتراضي عبر JSONBin أو Gist محلي مبسط
-        const response = await fetch(`https://api.jsonbin.io/v3/b`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Master-Key': '$2a$10$0123456789abcdef...' // مفتاح السحابة الآمن
-          },
-          body: JSON.stringify({ code, state })
-        });
-        alert('تم حفظ البيانات بنجاح في السحابة!');
-        syncModal.close();
-      } catch (e) {
-        // بديل محلي متين في حال عدم الاتصال المباشر
-        localStorage.setItem('cloud_backup_' + code, JSON.stringify(state));
-        alert('تم حفظ النسخة السحابية بنجاح على هذا المتصفح والسحابة المرتبطة بالكود!');
-        syncModal.close();
-      }
-    });
-
-    document.getElementById('btn-cloud-load').addEventListener('click', () => {
-      const code = document.getElementById('sync-code-input').value.trim();
-      if (!code) { alert('يرجى أدخال كود المزامنة للاستعادة'); return; }
-      
-      const savedCloudData = localStorage.getItem('cloud_backup_' + code);
-      if (savedCloudData) {
-        state = JSON.parse(savedCloudData);
-        saveState();
-        alert('تمت استعادة كافة البيانات السحابية بنجاح!');
-        syncModal.close();
-      } else {
-        alert('لم يتم العثور على بيانات مرتبطة بهذا الكود.');
-      }
-    });
-
+    // زر تنزيل النسخة الاحتياطية اليدوية باسم مخصص
     document.getElementById('btn-backup').addEventListener('click', () => {
+      const today = new Date().toISOString().slice(0,10);
+      const defaultName = `سجل_ديون_المحل_${today}`;
+      const customName = prompt('اكتب اسماً لملف النسخة الاحتياطية:', defaultName);
+      if (customName === null) return;
+      
+      const fileName = (customName.trim() || defaultName) + '.json';
       const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `shop-debts-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.download = fileName;
       a.click();
     });
 
+    // استعادة النسخة الاحتياطية من ملف
+    document.getElementById('input-restore').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (imported.customers && imported.transactions) {
+            state = imported;
+            saveState();
+            alert('تمت استعادة البيانات بنجاح!');
+          } else {
+            alert('الملف لا يحتوي على بيانات صالحة.');
+          }
+        } catch { 
+          alert('تأكد من اختيار ملف نسخة احتياطية صحيح (.json).'); 
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    // تصدير Excel (CSV)
     document.getElementById('btn-export-csv').addEventListener('click', () => {
+      const today = new Date().toISOString().slice(0,10);
       let csv = '\uFEFFالعميل,الهاتف,العملة,النوع,المبلغ,البيان,التاريخ\n';
       state.transactions.forEach(t => {
         const c = state.customers.find(cust => cust.id === t.customerId) || {};
@@ -415,7 +403,7 @@
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `shop-debts-report-${new Date().toISOString().slice(0,10)}.csv`;
+      a.download = `تقرير_الديون_${today}.csv`;
       a.click();
     });
 
@@ -423,5 +411,4 @@
     render();
   </script>
 </body>
-                </html>
-                
+</html>
